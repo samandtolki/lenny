@@ -1,0 +1,17 @@
+image: docker:dind
+
+services:
+  - docker:dind
+
+before_script:
+  - docker login -u commagray -p $CI_REGISTRY_PASSWORD lula.moonbutt.science
+
+build:
+  stage: build
+  script:
+    - docker build -t lula.moonbutt.science/innereq/containers/lenny docker/prod/Dockerfile
+
+deploy:
+  stage: deploy
+  script:
+    - docker push lula.moonbutt.science/innereq/containers/lenny
