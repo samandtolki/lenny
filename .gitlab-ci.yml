@@ -9,7 +9,7 @@ before_script:
 build:
   stage: build
   script:
-    - docker build -t lula.moonbutt.science/innereq/containers/lenny docker/prod/Dockerfile
+    - docker build -t lula.moonbutt.science/innereq/containers/lenny ./docker/prod
 
 deploy:
   stage: deploy
