@@ -1,13 +1,13 @@
 use crate::{
-  api::{APIError, Oper, Perform},
-  apub::{
+    api::{APIError, Oper, Perform},
+    apub::{
     extensions::signatures::generate_actor_keypair,
     make_apub_endpoint,
     ApubObjectType,
     EndpointType,
   },
-  blocking,
-  db::{
+    blocking,
+    db::{
     comment::*,
     comment_view::*,
     community::*,
@@ -30,22 +30,22 @@ use crate::{
     ListingType,
     SortType,
   },
-  generate_random_string,
-  is_valid_username,
-  naive_from_unix,
-  naive_now,
-  remove_slurs,
-  send_email,
-  settings::Settings,
-  slur_check,
-  slurs_vec_to_str,
-  websocket::{
+    generate_random_string,
+    is_valid_username,
+    naive_from_unix,
+    naive_now,
+    remove_blacklisted_words,
+    send_email,
+    settings::Settings,
+    blacklisted_word_check,
+    blacklisted_words_vec_to_str,
+    websocket::{
     server::{JoinUserRoom, SendAllMessage, SendUserRoomMessage},
     UserOperation,
     WebsocketInfo,
   },
-  DbPool,
-  LemmyError,
+    DbPool,
+    LemmyError,
 };
 use bcrypt::verify;
 use log::error;
@@ -307,8 +307,8 @@ impl Perform for Oper<Register> {
       return Err(APIError::err("passwords_dont_match").into());
     }
 
-    if let Err(slurs) = slur_check(&data.username) {
-      return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+    if let Err(blacklisted_words) = blacklisted_word_check(&data.username) {
+      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
     }
 
     // Make sure there are no admins
@@ -1180,10 +1180,10 @@ impl Perform for Oper<CreatePrivateMessage> {
       return Err(APIError::err("site_ban").into());
     }
 
-    let content_slurs_removed = remove_slurs(&data.content.to_owned());
+    let content_blacklisted_words_removed = remove_blacklisted_words(&data.content.to_owned());
 
     let private_message_form = PrivateMessageForm {
-      content: content_slurs_removed.to_owned(),
+      content: content_blacklisted_words_removed.to_owned(),
       creator_id: user_id,
       recipient_id: data.recipient_id,
       deleted: None,
@@ -1231,7 +1231,7 @@ impl Perform for Oper<CreatePrivateMessage> {
         );
         let html = &format!(
           "<h1>Private Message</h1><br><div>{} - {}</div><br><a href={}/inbox>inbox</a>",
-          claims.username, &content_slurs_removed, hostname
+          claims.username, &content_blacklisted_words_removed, hostname
         );
         match send_email(subject, &email, &recipient_user.name, html) {
           Ok(_o) => _o,
@@ -1295,13 +1295,13 @@ impl Perform for Oper<EditPrivateMessage> {
       return Err(APIError::err("no_private_message_edit_allowed").into());
     }
 
-    let content_slurs_removed = match &data.content {
-      Some(content) => remove_slurs(content),
+    let content_blacklisted_words_removed = match &data.content {
+      Some(content) => remove_blacklisted_words(content),
       None => orig_private_message.content,
     };
 
     let private_message_form = PrivateMessageForm {
-      content: content_slurs_removed,
+      content: content_blacklisted_words_removed,
       creator_id: orig_private_message.creator_id,
       recipient_id: orig_private_message.recipient_id,
       deleted: data.deleted.to_owned(),

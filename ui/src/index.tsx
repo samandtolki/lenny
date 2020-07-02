@@ -18,7 +18,6 @@ import { Setup } from './components/setup';
 import { AdminSettings } from './components/admin-settings';
 import { Inbox } from './components/inbox';
 import { Search } from './components/search';
-import { Sponsors } from './components/sponsors';
 import { Symbols } from './components/symbols';
 import { i18n } from './i18next';
 
@@ -84,7 +83,6 @@ class Index extends Component<any, any> {
                   component={Search}
                 />
                 <Route path={`/search`} component={Search} />
-                <Route path={`/sponsors`} component={Sponsors} />
                 <Route
                   path={`/password_change/:token`}
                   component={PasswordChange}

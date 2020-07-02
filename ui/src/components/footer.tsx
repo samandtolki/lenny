@@ -15,7 +15,7 @@ export class Footer extends Component<any, any> {
         <div className="navbar-collapse">
           <ul class="navbar-nav ml-auto">
             <li class="nav-item">
-              <span class="navbar-text">{version}</span>
+              <span class="navbar-text">( ͡° ͜ʖ ͡°) {version}</span>
             </li>
             <li class="nav-item">
               <Link class="nav-link" to="/modlog">
@@ -26,11 +26,6 @@ export class Footer extends Component<any, any> {
               <a class="nav-link" href={'/docs/index.html'}>
                 {i18n.t('docs')}
               </a>
-            </li>
-            <li class="nav-item">
-              <Link class="nav-link" to="/sponsors">
-                {i18n.t('donate')}
-              </Link>
             </li>
             <li class="nav-item">
               <a class="nav-link" href={repoUrl}>

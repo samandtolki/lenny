@@ -213,7 +213,6 @@ export class Main extends Component<any, MainState> {
               </div>
             </div>
             {this.sidebar()}
-            {this.landing()}
           </div>
         )}
       </div>
@@ -349,44 +348,6 @@ export class Main extends Component<any, MainState> {
             </div>
           </div>
         )}
-      </div>
-    );
-  }
-
-  landing() {
-    return (
-      <div class="card border-secondary">
-        <div class="card-body">
-          <h5>
-            {i18n.t('powered_by')}
-            <svg class="icon mx-2">
-              <use xlinkHref="#icon-mouse">#</use>
-            </svg>
-            <a href={repoUrl}>
-              Lemmy<sup>beta</sup>
-            </a>
-          </h5>
-          <p class="mb-0">
-            <T i18nKey="landing_0">
-              #
-              <a href="https://en.wikipedia.org/wiki/Social_network_aggregation">
-                #
-              </a>
-              <a href="https://en.wikipedia.org/wiki/Fediverse">#</a>
-              <br></br>
-              <code>#</code>
-              <br></br>
-              <b>#</b>
-              <br></br>
-              <a href={repoUrl}>#</a>
-              <br></br>
-              <a href="https://www.rust-lang.org">#</a>
-              <a href="https://actix.rs/">#</a>
-              <a href="https://infernojs.org">#</a>
-              <a href="https://www.typescriptlang.org/">#</a>
-            </T>
-          </p>
-        </div>
       </div>
     );
   }

@@ -12,8 +12,8 @@ use crate::{
   is_valid_community_name,
   naive_from_unix,
   naive_now,
-  slur_check,
-  slurs_vec_to_str,
+  blacklisted_word_check,
+  blacklisted_words_vec_to_str,
   websocket::{
     server::{JoinCommunityRoom, SendCommunityRoomMessage},
     UserOperation,
@@ -240,17 +240,17 @@ impl Perform for Oper<CreateCommunity> {
       Err(_e) => return Err(APIError::err("not_logged_in").into()),
     };
 
-    if let Err(slurs) = slur_check(&data.name) {
-      return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
+      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
     }
 
-    if let Err(slurs) = slur_check(&data.title) {
-      return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+    if let Err(blacklisted_words) = blacklisted_word_check(&data.title) {
+      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
     }
 
     if let Some(description) = &data.description {
-      if let Err(slurs) = slur_check(description) {
-        return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+      if let Err(blacklisted_words) = blacklisted_word_check(description) {
+        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
       }
     }
 
@@ -335,17 +335,17 @@ impl Perform for Oper<EditCommunity> {
   ) -> Result<CommunityResponse, LemmyError> {
     let data: &EditCommunity = &self.data;
 
-    if let Err(slurs) = slur_check(&data.name) {
-      return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
+      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
     }
 
-    if let Err(slurs) = slur_check(&data.title) {
-      return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+    if let Err(blacklisted_words) = blacklisted_word_check(&data.title) {
+      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
     }
 
     if let Some(description) = &data.description {
-      if let Err(slurs) = slur_check(description) {
-        return Err(APIError::err(&slurs_vec_to_str(slurs)).into());
+      if let Err(blacklisted_words) = blacklisted_word_check(description) {
+        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
       }
     }
 
