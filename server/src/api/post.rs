@@ -20,8 +20,6 @@ use crate::{
   },
   fetch_iframely_and_pictrs_data,
   naive_now,
-  blacklisted_word_check,
-  blacklisted_words_vec_to_str,
   websocket::{
     server::{JoinCommunityRoom, JoinPostRoom, SendPost},
     UserOperation,
@@ -125,16 +123,6 @@ impl Perform for Oper<CreatePost> {
       Ok(claims) => claims.claims,
       Err(_e) => return Err(APIError::err("not_logged_in").into()),
     };
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(body) = &data.body {
-      if let Err(blacklisted_words) = blacklisted_word_check(body) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
 
     let user_id = claims.id;
 
@@ -501,16 +489,6 @@ impl Perform for Oper<EditPost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &EditPost = &self.data;
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(body) = &data.body {
-      if let Err(blacklisted_words) = blacklisted_word_check(body) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
 
     let claims = match Claims::decode(&data.auth) {
       Ok(claims) => claims.claims,

@@ -74,7 +74,7 @@ use lettre_email::Email;
 use log::error;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use serde::Deserialize;
 
 pub type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
@@ -141,30 +141,6 @@ pub async fn is_image_content_type(client: &Client, test: &str) -> Result<(), Le
   } else {
     Err(format_err!("Not an image type.").into())
   }
-}
-
-pub fn remove_blacklisted_words(test: &str) -> String {
-  BLACKLISTED_WORDS_REGEX.replace_all(test, "*removed*").to_string()
-}
-
-pub fn blacklisted_word_check(test: &str) -> Result<(), Vec<&str>> {
-  let mut matches: Vec<&str> = BLACKLISTED_WORDS_REGEX.find_iter(test).map(|mat| mat.as_str()).collect();
-
-  // Unique
-  matches.sort_unstable();
-  matches.dedup();
-
-  if matches.is_empty() {
-    Ok(())
-  } else {
-    Err(matches)
-  }
-}
-
-pub fn blacklisted_words_vec_to_str(blacklisted_words: Vec<&str>) -> String {
-  let start = "No blacklisted words - ";
-  let combined = &blacklisted_words.join(", ");
-  [start, combined].concat()
 }
 
 pub fn generate_random_string() -> String {
@@ -375,10 +351,7 @@ mod tests {
       is_image_content_type,
       is_valid_community_name,
       is_valid_username,
-      remove_blacklisted_words,
       scrape_text_for_mentions,
-      blacklisted_word_check,
-      blacklisted_words_vec_to_str,
   };
 
   #[test]
@@ -428,34 +401,6 @@ mod tests {
     assert!(!is_valid_community_name(""));
   }
 
-  // #[test]
-  // fn test_blacklisted_word_filter() {
-  //   let test =
-  //     "coons test dindu ladyboy tranny retardeds. Capitalized Niggerz. This is a bunch of other safe text.";
-  //   let blacklisted_word_free = "No blacklisted words here";
-  //   assert_eq!(
-  //       remove_blacklisted_words(&test),
-  //       "*removed* test *removed* *removed* *removed* *removed*. Capitalized *removed*. This is a bunch of other safe text."
-  //       .to_string()
-  //   );
-
-  //   let has_blacklisted_words_vec = vec![
-  //     "Niggerz",
-  //     "coons",
-  //     "dindu",
-  //     "ladyboy",
-  //     "retardeds",
-  //     "tranny",
-  //   ];
-  //   let has_blacklisted_words_err_str = "No blacklisted words - Niggerz, coons, dindu, ladyboy, retardeds, tranny";
-
-  //   assert_eq!(blacklisted_word_check(test), Err(has_blacklisted_words_vec));
-  //   assert_eq!(blacklisted_word_check(blacklisted_word_free), Ok(()));
-  //   if let Err(blacklisted_word_vec) = blacklisted_word_check(test) {
-  //     assert_eq!(&blacklisted_words_vec_to_str(blacklisted_word_vec), has_blacklisted_words_err_str);
-  //   }
-  // }
-
   // These helped with testing
   // #[test]
   // fn test_iframely() {
@@ -480,8 +425,6 @@ mod tests {
 
 lazy_static! {
   static ref EMAIL_REGEX: Regex = Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").unwrap();
-  // Implementation considered harmful because of ugly hardcode.
-  static ref BLACKLISTED_WORDS_REGEX: Regex = RegexBuilder::new(r"/.^/").case_insensitive(true).build().unwrap();
   static ref USERNAME_MATCHES_REGEX: Regex = Regex::new(r"/u/[a-zA-Z][0-9a-zA-Z_]*").unwrap();
   // TODO keep this old one, it didn't work with port well tho
   // static ref WEBFINGER_USER_REGEX: Regex = Regex::new(r"@(?P<name>[\w.]+)@(?P<domain>[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)").unwrap();

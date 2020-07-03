@@ -19,7 +19,6 @@ use crate::{
     SortType,
   },
   naive_now,
-  remove_blacklisted_words,
   scrape_text_for_mentions,
   send_email,
   settings::Settings,
@@ -113,10 +112,8 @@ impl Perform for Oper<CreateComment> {
 
     let user_id = claims.id;
 
-    let content_blacklisted_words_removed = remove_blacklisted_words(&data.content.to_owned());
-
     let comment_form = CommentForm {
-      content: content_blacklisted_words_removed,
+      content: data.content.to_owned(),
       parent_id: data.parent_id.to_owned(),
       post_id: data.post_id,
       creator_id: user_id,
@@ -278,13 +275,11 @@ impl Perform for Oper<EditComment> {
       }
     }
 
-    let content_blacklisted_words_removed = remove_blacklisted_words(&data.content.to_owned());
-
     let edit_id = data.edit_id;
     let read_comment = blocking(pool, move |conn| Comment::read(conn, edit_id)).await??;
 
     let comment_form = CommentForm {
-      content: content_blacklisted_words_removed,
+      content: data.content.to_owned(),
       parent_id: data.parent_id,
       post_id: data.post_id,
       creator_id: data.creator_id,

@@ -20,8 +20,6 @@ use crate::{
   },
   naive_now,
   settings::Settings,
-  blacklisted_word_check,
-  blacklisted_words_vec_to_str,
   websocket::{server::SendAllMessage, UserOperation, WebsocketInfo},
   DbPool,
   LemmyError,
@@ -245,16 +243,6 @@ impl Perform for Oper<CreateSite> {
       Err(_e) => return Err(APIError::err("not_logged_in").into()),
     };
 
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(description) = &data.description {
-      if let Err(blacklisted_words) = blacklisted_word_check(description) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
-
     let user_id = claims.id;
 
     // Make sure user is an admin
@@ -298,16 +286,6 @@ impl Perform for Oper<EditSite> {
       Ok(claims) => claims.claims,
       Err(_e) => return Err(APIError::err("not_logged_in").into()),
     };
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(description) = &data.description {
-      if let Err(blacklisted_words) = blacklisted_word_check(description) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
 
     let user_id = claims.id;
 

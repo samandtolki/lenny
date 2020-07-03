@@ -12,8 +12,6 @@ use crate::{
   is_valid_community_name,
   naive_from_unix,
   naive_now,
-  blacklisted_word_check,
-  blacklisted_words_vec_to_str,
   websocket::{
     server::{JoinCommunityRoom, SendCommunityRoomMessage},
     UserOperation,
@@ -240,20 +238,6 @@ impl Perform for Oper<CreateCommunity> {
       Err(_e) => return Err(APIError::err("not_logged_in").into()),
     };
 
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.title) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(description) = &data.description {
-      if let Err(blacklisted_words) = blacklisted_word_check(description) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
-
     if !is_valid_community_name(&data.name) {
       return Err(APIError::err("invalid_community_name").into());
     }
@@ -334,20 +318,6 @@ impl Perform for Oper<EditCommunity> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommunityResponse, LemmyError> {
     let data: &EditCommunity = &self.data;
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.name) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Err(blacklisted_words) = blacklisted_word_check(&data.title) {
-      return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-    }
-
-    if let Some(description) = &data.description {
-      if let Err(blacklisted_words) = blacklisted_word_check(description) {
-        return Err(APIError::err(&blacklisted_words_vec_to_str(blacklisted_words)).into());
-      }
-    }
 
     let claims = match Claims::decode(&data.auth) {
       Ok(claims) => claims.claims,
