@@ -208,7 +208,6 @@
     "email_already_exists": "Az email már létezik.",
     "system_err_login": "Rendszerhiba. Próbálj meg ki- és bejelentkezni!",
     "block_leaving": "Biztos vagy abban, hogy távozni akarsz?",
-    "landing": "A Lemmy egy <1>linkaggregátor</1> / reddit alternatíva, melynek célja együttműködni a <2>fediverzummal</2>.<3></3>Bárki működtetheti saját szerverként, támogatja a valós időben frissülő hozzászólási szálakat, és pici (<4>~80kB</4>). Az ActivityPub hálózattal történő föderáció tervben van. <5></5>Ez egy <6>nagyon korai béta verzió</6> sok funkció jelenleg nem működik vagy hiányzik. <7></7>Javasolj új funkciókat vagy jelents hibákat <8>itt!</8><9></9><10>Rust</10>, <11>Actix</11>, <12>Inferno</12> és <13>Typescript</13> felhasználásával készült.",
     "couldnt_create_comment": "Nem lehetett létrehozni a hozzászólást.",
     "couldnt_like_comment": "Nem lehetett kedvelni a hozzászólást.",
     "couldnt_update_comment": "Nem lehetett frissíteni a hozzászólást.",

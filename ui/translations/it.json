@@ -149,7 +149,6 @@
     "are_you_sure": "sei sicuro?",
     "yes": "sì",
     "no": "no",
-    "landing": "Lemmy è un <1>aggregatore di link</1> / alternativa a reddit, creato per integrarsi con il <2>fediverso</2>. <3></3>È self-hosted, i commenti sono aggiornati in tempo reale ed è molto piccolo (<4>~80kB</4>). La federazione con la rete ActivityPub sarà implementata nel futuro. <5></5>Questa versione è una <6>beta molto giovane</6> e molte funzionalità sono incomplete o mancanti. <7></7>Suggerisci nuove funzionalità o segnala errori a <8>questa pagina.</8><9></9>Sviluppato con <10>Rust</10>, <11>Actix</11>, <12>Inferno</12>, <13>Typescript</13>.",
     "not_logged_in": "Non hai effettuato l'accesso.",
     "community_ban": "Sei stato escluso da questa comunità.",
     "site_ban": "Sei stato escluso dal sito",

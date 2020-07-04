@@ -239,6 +239,5 @@
     "private_message_disclaimer": "Uyarı: Lemmy'de şahsa özel mesajlar güvenli değildir. Güvenli mesajlaşma için <1>Riot.im</1> adresinde hesap açabilirsiniz.",
     "lemmy_instance_setup": "Lemmy ülgüsünün kurulumu",
     "transfer_community": "topluluğu transfer et",
-    "landing": "Lemmy, <2>Fediverse</2> ile iç içe olacak şekilde dizayn edilmiş bir <1>bağlantı yığıştırıcısı</1> yani Reddit alternatifidir.<3></3>Herkesçe host edilebilir, yorum dizisi anlık yenilenir ve kodu küçüktür (<4>80kB</4>). ActivityPub protokol ağına integrasyon plandadır.<5></5>Bu daha <6>çok erken bir beta versiyonudur</6> ve bir sürü özellik ya bozuk ya da daha eklenmemiştir.<7></7>Yeni özellikler talebinde bulunmayı ya da yazılımdaki bozuklukları bildirmeyi <8>buradan</8> yapabilirsiniz.<9></9><10>Rust</10>, <11>Actix</11>, <12>Inferno</12> ve <13>Typescript</13> ile yapılmıştır.",
     "couldnt_get_posts": "Paylaşımlar yüklenemedi"
 }

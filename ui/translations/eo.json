@@ -128,7 +128,6 @@
     "to": "al",
     "transfer_community": "transdoni la komunumon",
     "transfer_site": "transdoni la retejon",
-    "landing": "Lemmy estas <1>amasigilo de ligiloj</1> / alternativo de Reddit, intencita funkcii en la <2>federuniverso</2>.<3></3>ĝi estas mem-gastigebla, havas tuj-ĝisdatigojn de komentaroj, kaj estas malgrandega (<4>~80kB</4>). Federado en la reto de ActivityPub estas planita. <5></5>Ĉi tio estas <6>tre frua beta-versio</6>, kaj multaj funkcioj estas nune difektaj aŭ mankaj. <7></7>Proponu novajn funkciojn aŭ raportu erarojn <8>ĉi tie.</8><9></9>Konstruita per <10>Rust</10>, <11>Actix</11>, <12>Inferno</12>, <13>Typescript</13>.",
     "not_logged_in": "Nesalutinta.",
     "community_ban": "Vi estas forbarita de la komunumo.",
     "site_ban": "Vi estas forbarita de la retejo",

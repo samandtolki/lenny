@@ -179,7 +179,6 @@
     "are_you_sure": "Êtes-vous sûr ?",
     "yes": "oui",
     "no": "non",
-    "landing": "Lemmy est un <1>aggrégateur de liens</1>, similaire à Reddit et conçu pour fonctionner sur le <2>Fédivers</2>.<3></3>Il est auto-hébergeable, se met à jour en direct et est léger (<4>~80kB</4>). La fédération via ActivityPub est prévue dans sa feuille de route. <5></5>Lemmy est une <6>version beta très précoce</6> et de nombreuses fonctionnalités sont manquantes ou non fonctionnelles. <7></7>Vous pouvez signaler des bugs et suggérer de nouvelles fonctionnalités <8>ici.</8><9></9>Créé avec <10>Rust</10>, <11>Actix</11>, <12>Inferno</12>, <13>Typescript</13>.",
     "not_logged_in": "Vous n’êtes pas connecté.",
     "logged_in": "Vous êtes connecté.",
     "community_ban": "Vous avez été banni de cette communauté.",

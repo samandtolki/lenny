@@ -201,7 +201,6 @@
     "transfer_community": "transferentzia-komunitatea",
     "transfer_site": "transferentzia-gunea",
     "are_you_sure": "Ziur ahal zaude?",
-    "landing": "Lemmy <1>lotura-agregatzailea</1> /reddit alternatiboa da, eta <2>fedibertsoan</2> lan egiteko erabiltzen da. <3></3>Autohospedagarria da, iruzkin-hari eguneratuak ditu, eta txikia da (<4>~80kB</4>). ActivityPub sareko federazioa bide orrian dago. <5></5><6>Beta bertsio goiztiarra</6> da hau, eta ezaugarri asko hautsita edo desagertuta daude gaur egun. <7></7>Ezaugarri berriak iradokitzea edo akatsak jakinaraztea <8>hemen.</8><9></9> Rust, <11>Actix</11>, <12>Inferno</12>, <13>Typescriptekin egina</13>.",
     "logged_in": "Konektatuta zaude.",
     "not_logged_in": "Ez zaude konektatuta.",
     "site_saved": "Gunea Gordeta.",
