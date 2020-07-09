@@ -18,7 +18,6 @@ import {
   BanUserResponse,
   AddModToCommunityResponse,
   AddAdminResponse,
-  UserView,
   SearchType,
   SortType,
   SearchForm,
@@ -52,12 +51,12 @@ interface PostState {
   commentSort: CommentSortType;
   community: Community;
   moderators: Array<CommunityUser>;
-  admins: Array<UserView>;
   online: number;
   scrolled?: boolean;
   scrolled_comment_id?: number;
   loading: boolean;
   crossPosts: Array<PostI>;
+  siteRes: GetSiteResponse;
 }
 
 export class Post extends Component<any, PostState> {
@@ -68,11 +67,29 @@ export class Post extends Component<any, PostState> {
     commentSort: CommentSortType.Hot,
     community: null,
     moderators: [],
-    admins: [],
     online: null,
     scrolled: false,
     loading: true,
     crossPosts: [],
+    siteRes: {
+      admins: [],
+      banned: [],
+      site: {
+        id: undefined,
+        name: undefined,
+        creator_id: undefined,
+        published: undefined,
+        creator_name: undefined,
+        number_of_users: undefined,
+        number_of_posts: undefined,
+        number_of_comments: undefined,
+        number_of_communities: undefined,
+        enable_downvotes: undefined,
+        open_registration: undefined,
+        enable_nsfw: undefined,
+      },
+      online: null,
+    },
   };
 
   constructor(props: any, context: any) {
@@ -97,6 +114,7 @@ export class Post extends Component<any, PostState> {
       id: postId,
     };
     WebSocketService.Instance.getPost(form);
+    WebSocketService.Instance.getSite();
   }
 
   componentWillUnmount() {
@@ -179,7 +197,9 @@ export class Post extends Component<any, PostState> {
                 showBody
                 showCommunity
                 moderators={this.state.moderators}
-                admins={this.state.admins}
+                admins={this.state.siteRes.admins}
+                enableDownvotes={this.state.siteRes.site.enable_downvotes}
+                enableNsfw={this.state.siteRes.site.enable_nsfw}
               />
               <div className="mb-2" />
               <CommentForm
@@ -268,9 +288,10 @@ export class Post extends Component<any, PostState> {
             noIndent
             locked={this.state.post.locked}
             moderators={this.state.moderators}
-            admins={this.state.admins}
+            admins={this.state.siteRes.admins}
             postCreatorId={this.state.post.creator_id}
             showContext
+            enableDownvotes={this.state.siteRes.site.enable_downvotes}
           />
         </div>
       </div>
@@ -283,8 +304,9 @@ export class Post extends Component<any, PostState> {
         <Sidebar
           community={this.state.community}
           moderators={this.state.moderators}
-          admins={this.state.admins}
+          admins={this.state.siteRes.admins}
           online={this.state.online}
+          enableNsfw={this.state.siteRes.site.enable_nsfw}
         />
       </div>
     );
@@ -335,9 +357,10 @@ export class Post extends Component<any, PostState> {
           nodes={nodes}
           locked={this.state.post.locked}
           moderators={this.state.moderators}
-          admins={this.state.admins}
+          admins={this.state.siteRes.admins}
           postCreatorId={this.state.post.creator_id}
           sort={this.state.commentSort}
+          enableDownvotes={this.state.siteRes.site.enable_downvotes}
         />
       </div>
     );
@@ -359,10 +382,10 @@ export class Post extends Component<any, PostState> {
       this.state.comments = data.comments;
       this.state.community = data.community;
       this.state.moderators = data.moderators;
-      this.state.admins = data.admins;
+      this.state.siteRes.admins = data.admins;
       this.state.online = data.online;
       this.state.loading = false;
-      document.title = `${this.state.post.name} - ${WebSocketService.Instance.site.name}`;
+      document.title = `${this.state.post.name} - ${this.state.siteRes.site.name}`;
 
       // Get cross-posts
       if (this.state.post.url) {
@@ -449,7 +472,7 @@ export class Post extends Component<any, PostState> {
       this.setState(this.state);
     } else if (res.op == UserOperation.AddAdmin) {
       let data = res.data as AddAdminResponse;
-      this.state.admins = data.admins;
+      this.state.siteRes.admins = data.admins;
       this.setState(this.state);
     } else if (res.op == UserOperation.Search) {
       let data = res.data as SearchResponse;
@@ -460,15 +483,18 @@ export class Post extends Component<any, PostState> {
         this.state.post.duplicates = this.state.crossPosts;
       }
       this.setState(this.state);
-    } else if (res.op == UserOperation.TransferSite) {
+    } else if (
+      res.op == UserOperation.TransferSite ||
+      res.op == UserOperation.GetSite
+    ) {
       let data = res.data as GetSiteResponse;
-      this.state.admins = data.admins;
+      this.state.siteRes = data;
       this.setState(this.state);
     } else if (res.op == UserOperation.TransferCommunity) {
       let data = res.data as GetCommunityResponse;
       this.state.community = data.community;
       this.state.moderators = data.moderators;
-      this.state.admins = data.admins;
+      this.state.siteRes.admins = data.admins;
       this.setState(this.state);
     }
   }
