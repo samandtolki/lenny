@@ -31,7 +31,9 @@ This is bullshit.
 
 The easiest way to build this project is using Podman (or Docker).
 
-Take a look at [`shtripok/rust-musl-builder`](https://hub.docker.com/r/shtripok/rust-musl-builder) container. You can use it both in coding process and building production images. Here is an example how to setup a coding environment:
+Take a look at [`shtripok/rust-musl-builder`](https://hub.docker.com/r/shtripok/rust-musl-builder) container. You can use it both in coding process and building production images.
+
+Here is an example how to setup a coding environment:
 
 ```bash
 git clone https://moonbutt.science/innereq/containers/lenny && cd lenny
