@@ -27,7 +27,7 @@ use lettre::{
 use lettre_email::Email;
 use openssl::{pkey::PKey, rsa::Rsa};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use std::io::{Error, ErrorKind};
 use url::Url;
 
