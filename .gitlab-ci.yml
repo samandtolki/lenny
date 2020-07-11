@@ -8,4 +8,4 @@ build:
     - /kaniko/executor --cache=true --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/prod/Dockerfile --destination lula.moonbutt.science/$CI_PROJECT_PATH
   only:
     variables:
-      - $CI_COMMIT_MESSAGE =~ /Build!/i
+      - $CI_COMMIT_MESSAGE =~ /Build!.*/i
