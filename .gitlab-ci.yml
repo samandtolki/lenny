@@ -6,3 +6,6 @@ build:
   script:
     - echo "{\"auths\":{\"https://lula.moonbutt.science\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --cache=true --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/prod/Dockerfile --destination lula.moonbutt.science/$CI_PROJECT_PATH
+  only:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /^BUILD!.*$/i
