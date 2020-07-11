@@ -5,76 +5,39 @@ pub extern crate strum_macros;
 pub extern crate lazy_static;
 #[macro_use]
 pub extern crate failure;
-#[macro_use]
-pub extern crate diesel;
 pub extern crate actix;
 pub extern crate actix_web;
 pub extern crate bcrypt;
 pub extern crate chrono;
-pub extern crate comrak;
+pub extern crate diesel;
 pub extern crate dotenv;
 pub extern crate jsonwebtoken;
-pub extern crate lettre;
-pub extern crate lettre_email;
 extern crate log;
 pub extern crate openssl;
-pub extern crate rand;
-pub extern crate regex;
 pub extern crate rss;
 pub extern crate serde;
 pub extern crate serde_json;
 pub extern crate sha2;
 pub extern crate strum;
 
-pub async fn blocking<F, T>(pool: &DbPool, f: F) -> Result<T, LemmyError>
-where
-  F: FnOnce(&diesel::PgConnection) -> T + Send + 'static,
-  T: Send + 'static,
-{
-  let pool = pool.clone();
-  let res = actix_web::web::block(move || {
-    let conn = pool.get()?;
-    let res = (f)(&conn);
-    Ok(res) as Result<_, LemmyError>
-  })
-  .await?;
-
-  Ok(res)
-}
-
 pub mod api;
 pub mod apub;
-pub mod db;
+pub mod code_migrations;
 pub mod rate_limit;
 pub mod request;
 pub mod routes;
-pub mod schema;
-pub mod settings;
 pub mod version;
 pub mod websocket;
 
-use crate::{
-  request::{retry, RecvError},
-  settings::Settings,
-};
+use crate::request::{retry, RecvError};
 use actix_web::{client::Client, dev::ConnectionInfo};
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, Utc};
-use itertools::Itertools;
-use lettre::{
-  smtp::{
-    authentication::{Credentials, Mechanism},
-    extension::ClientId,
-    ConnectionReuseParameters,
-  },
-  ClientSecurity,
-  SmtpClient,
-  Transport,
-};
-use lettre_email::Email;
 use log::error;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+<<<<<<< HEAD
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use regex::Regex;
+=======
+>>>>>>> upstream/master
 use serde::Deserialize;
 
 pub type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
@@ -89,14 +52,6 @@ pub struct LemmyError {
   inner: failure::Error,
 }
 
-impl std::fmt::Display for LemmyError {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    self.inner.fmt(f)
-  }
-}
-
-impl actix_web::error::ResponseError for LemmyError {}
-
 impl<T> From<T> for LemmyError
 where
   T: Into<failure::Error>,
@@ -106,6 +61,7 @@ where
   }
 }
 
+<<<<<<< HEAD
 pub fn to_datetime_utc(ndt: NaiveDateTime) -> DateTime<Utc> {
   DateTime::<Utc>::from_utc(ndt, Utc)
 }
@@ -189,6 +145,15 @@ pub fn send_email(
     Err(e) => Err(e.to_string()),
   }
 }
+=======
+impl std::fmt::Display for LemmyError {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    self.inner.fmt(f)
+  }
+}
+
+impl actix_web::error::ResponseError for LemmyError {}
+>>>>>>> upstream/master
 
 #[derive(Deserialize, Debug)]
 pub struct IframelyResponse {
@@ -295,8 +260,20 @@ async fn fetch_iframely_and_pictrs_data(
   }
 }
 
-pub fn markdown_to_html(text: &str) -> String {
-  comrak::markdown_to_html(text, &comrak::ComrakOptions::default())
+pub async fn is_image_content_type(client: &Client, test: &str) -> Result<(), LemmyError> {
+  let response = retry(|| client.get(test).send()).await?;
+
+  if response
+    .headers()
+    .get("Content-Type")
+    .ok_or_else(|| format_err!("No Content-Type header"))?
+    .to_str()?
+    .starts_with("image/")
+  {
+    Ok(())
+  } else {
+    Err(format_err!("Not an image type.").into())
+  }
 }
 
 pub fn get_ip(conn_info: &ConnectionInfo) -> String {
@@ -309,43 +286,25 @@ pub fn get_ip(conn_info: &ConnectionInfo) -> String {
     .to_string()
 }
 
-// TODO nothing is done with community / group webfingers yet, so just ignore those for now
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct MentionData {
-  pub name: String,
-  pub domain: String,
-}
+pub async fn blocking<F, T>(pool: &DbPool, f: F) -> Result<T, LemmyError>
+where
+  F: FnOnce(&diesel::PgConnection) -> T + Send + 'static,
+  T: Send + 'static,
+{
+  let pool = pool.clone();
+  let res = actix_web::web::block(move || {
+    let conn = pool.get()?;
+    let res = (f)(&conn);
+    Ok(res) as Result<_, LemmyError>
+  })
+  .await?;
 
-impl MentionData {
-  pub fn is_local(&self) -> bool {
-    Settings::get().hostname.eq(&self.domain)
-  }
-  pub fn full_name(&self) -> String {
-    format!("@{}@{}", &self.name, &self.domain)
-  }
-}
-
-pub fn scrape_text_for_mentions(text: &str) -> Vec<MentionData> {
-  let mut out: Vec<MentionData> = Vec::new();
-  for caps in WEBFINGER_USER_REGEX.captures_iter(text) {
-    out.push(MentionData {
-      name: caps["name"].to_string(),
-      domain: caps["domain"].to_string(),
-    });
-  }
-  out.into_iter().unique().collect()
-}
-
-pub fn is_valid_username(name: &str) -> bool {
-  VALID_USERNAME_REGEX.is_match(name)
-}
-
-pub fn is_valid_community_name(name: &str) -> bool {
-  VALID_COMMUNITY_NAME_REGEX.is_match(name)
+  Ok(res)
 }
 
 #[cfg(test)]
 mod tests {
+<<<<<<< HEAD
   use crate::{
       is_email_regex,
       is_image_content_type,
@@ -363,10 +322,14 @@ mod tests {
     assert_eq!(mentions[0].domain, "honk.teduangst.com".to_string());
     assert_eq!(mentions[1].domain, "lemmy-alpha:8540".to_string());
   }
+=======
+  use crate::is_image_content_type;
+>>>>>>> upstream/master
 
   #[test]
   fn test_image() {
     actix_rt::System::new("tset_image").block_on(async move {
+<<<<<<< HEAD
         let client = actix_web::client::Client::default();
         assert!(is_image_content_type(&client, "https://1734811051.rsc.cdn77.org/data/images/full/365645/as-virus-kills-navajos-in-their-homes-tribal-women-provide-lifeline.jpg?w=600?w=650").await.is_ok());
         assert!(is_image_content_type(&client,
@@ -399,6 +362,16 @@ mod tests {
     assert!(!is_valid_community_name("Example"));
     assert!(!is_valid_community_name("Ex"));
     assert!(!is_valid_community_name(""));
+=======
+      let client = actix_web::client::Client::default();
+      assert!(is_image_content_type(&client, "https://1734811051.rsc.cdn77.org/data/images/full/365645/as-virus-kills-navajos-in-their-homes-tribal-women-provide-lifeline.jpg?w=600?w=650").await.is_ok());
+      assert!(is_image_content_type(&client,
+                                    "https://twitter.com/BenjaminNorton/status/1259922424272957440?s=20"
+      )
+        .await.is_err()
+      );
+    });
+>>>>>>> upstream/master
   }
 
   // These helped with testing
@@ -415,6 +388,7 @@ mod tests {
   //   let res_other = fetch_pictshare("https://upload.wikimedia.org/wikipedia/en/2/27/The_Mandalorian_logo.jpgaoeu");
   //   assert!(res_other.is_err());
   // }
+<<<<<<< HEAD
 
   // #[test]
   // fn test_send_email() {
@@ -431,4 +405,6 @@ lazy_static! {
   static ref WEBFINGER_USER_REGEX: Regex = Regex::new(r"@(?P<name>[\w.]+)@(?P<domain>[a-zA-Z0-9._:-]+)").unwrap();
   static ref VALID_USERNAME_REGEX: Regex = Regex::new(r"^[a-zA-Z0-9_]{3,20}$").unwrap();
   static ref VALID_COMMUNITY_NAME_REGEX: Regex = Regex::new(r"^[a-z0-9_]{3,20}$").unwrap();
+=======
+>>>>>>> upstream/master
 }
