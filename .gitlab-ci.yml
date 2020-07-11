@@ -4,5 +4,5 @@ build:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
   script:
-    - echo "{\"auths\":{\"https://$CI_SERVER_HOST\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - echo "{\"auths\":{\"https://lula.moonbutt.science\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --cache=true --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/prod/Dockerfile --destination $CI_PROJECT_URL
