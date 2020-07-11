@@ -1,5 +1,5 @@
-deploy:
-  stage: deploy
+build:
+  stage: build
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
