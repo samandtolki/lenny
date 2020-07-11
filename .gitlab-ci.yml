@@ -1,17 +1,8 @@
-image: docker:dind
-
-services:
-  - docker:dind
-
-before_script:
-  - docker login -u commagray -p $CI_REGISTRY_PASSWORD lula.moonbutt.science
-
-build:
-  stage: build
-  script:
-    - env DOCKER_BUILDKIT=1 docker build -t lula.moonbutt.science/innereq/containers/lenny -f ./docker/prod/Dockerfile .
-
 deploy:
   stage: deploy
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   script:
-    - docker push lula.moonbutt.science/innereq/containers/lenny
+    - echo "{\"auths\":{\"https://lula.moonbutt.science\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/prod/Dockerfile --destination innereq/containers/lenny
