@@ -371,7 +371,6 @@ mod tests {
         .await.is_err()
       );
     });
->>>>>>> upstream/master
   }
 
   // These helped with testing
@@ -388,7 +387,6 @@ mod tests {
   //   let res_other = fetch_pictshare("https://upload.wikimedia.org/wikipedia/en/2/27/The_Mandalorian_logo.jpgaoeu");
   //   assert!(res_other.is_err());
   // }
-<<<<<<< HEAD
 
   // #[test]
   // fn test_send_email() {
@@ -405,6 +403,4 @@ lazy_static! {
   static ref WEBFINGER_USER_REGEX: Regex = Regex::new(r"@(?P<name>[\w.]+)@(?P<domain>[a-zA-Z0-9._:-]+)").unwrap();
   static ref VALID_USERNAME_REGEX: Regex = Regex::new(r"^[a-zA-Z0-9_]{3,20}$").unwrap();
   static ref VALID_COMMUNITY_NAME_REGEX: Regex = Regex::new(r"^[a-z0-9_]{3,20}$").unwrap();
-=======
->>>>>>> upstream/master
 }
