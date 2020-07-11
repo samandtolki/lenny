@@ -2,29 +2,6 @@ use crate::{
   api::{claims::Claims, APIError, Oper, Perform},
   apub::{ApubLikeableType, ApubObjectType},
   blocking,
-<<<<<<< HEAD
-  db::{
-    comment::*,
-    comment_view::*,
-    community_view::*,
-    moderator::*,
-    post::*,
-    site_view::*,
-    user::*,
-    user_mention::*,
-    user_view::*,
-    Crud,
-    Likeable,
-    ListingType,
-    Saveable,
-    SortType,
-  },
-  naive_now,
-  scrape_text_for_mentions,
-  send_email,
-  settings::Settings,
-=======
->>>>>>> upstream/master
   websocket::{
     server::{JoinCommunityRoom, SendComment},
     UserOperation,

@@ -33,11 +33,6 @@ use crate::request::{retry, RecvError};
 use actix_web::{client::Client, dev::ConnectionInfo};
 use log::error;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-<<<<<<< HEAD
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use regex::Regex;
-=======
->>>>>>> upstream/master
 use serde::Deserialize;
 
 pub type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
@@ -61,91 +56,6 @@ where
   }
 }
 
-<<<<<<< HEAD
-pub fn to_datetime_utc(ndt: NaiveDateTime) -> DateTime<Utc> {
-  DateTime::<Utc>::from_utc(ndt, Utc)
-}
-
-pub fn naive_now() -> NaiveDateTime {
-  chrono::prelude::Utc::now().naive_utc()
-}
-
-pub fn naive_from_unix(time: i64) -> NaiveDateTime {
-  NaiveDateTime::from_timestamp(time, 0)
-}
-
-pub fn convert_datetime(datetime: NaiveDateTime) -> DateTime<FixedOffset> {
-  let now = Local::now();
-  DateTime::<FixedOffset>::from_utc(datetime, *now.offset())
-}
-
-pub fn is_email_regex(test: &str) -> bool {
-  EMAIL_REGEX.is_match(test)
-}
-
-pub async fn is_image_content_type(client: &Client, test: &str) -> Result<(), LemmyError> {
-  let response = retry(|| client.get(test).send()).await?;
-
-  if response
-    .headers()
-    .get("Content-Type")
-    .ok_or_else(|| format_err!("No Content-Type header"))?
-    .to_str()?
-    .starts_with("image/")
-  {
-    Ok(())
-  } else {
-    Err(format_err!("Not an image type.").into())
-  }
-}
-
-pub fn generate_random_string() -> String {
-  thread_rng().sample_iter(&Alphanumeric).take(30).collect()
-}
-
-pub fn send_email(
-  subject: &str,
-  to_email: &str,
-  to_username: &str,
-  html: &str,
-) -> Result<(), String> {
-  let email_config = Settings::get().email.ok_or("no_email_setup")?;
-
-  let email = Email::builder()
-    .to((to_email, to_username))
-    .from(email_config.smtp_from_address.to_owned())
-    .subject(subject)
-    .html(html)
-    .build()
-    .unwrap();
-
-  let mailer = if email_config.use_tls {
-    SmtpClient::new_simple(&email_config.smtp_server).unwrap()
-  } else {
-    SmtpClient::new(&email_config.smtp_server, ClientSecurity::None).unwrap()
-  }
-  .hello_name(ClientId::Domain(Settings::get().hostname))
-  .smtp_utf8(true)
-  .authentication_mechanism(Mechanism::Plain)
-  .connection_reuse(ConnectionReuseParameters::ReuseUnlimited);
-  let mailer = if let (Some(login), Some(password)) =
-    (&email_config.smtp_login, &email_config.smtp_password)
-  {
-    mailer.credentials(Credentials::new(login.to_owned(), password.to_owned()))
-  } else {
-    mailer
-  };
-
-  let mut transport = mailer.transport();
-  let result = transport.send(email.into());
-  transport.close();
-
-  match result {
-    Ok(_) => Ok(()),
-    Err(e) => Err(e.to_string()),
-  }
-}
-=======
 impl std::fmt::Display for LemmyError {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     self.inner.fmt(f)
@@ -153,7 +63,6 @@ impl std::fmt::Display for LemmyError {
 }
 
 impl actix_web::error::ResponseError for LemmyError {}
->>>>>>> upstream/master
 
 #[derive(Deserialize, Debug)]
 pub struct IframelyResponse {
@@ -304,65 +213,11 @@ where
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
-  use crate::{
-      is_email_regex,
-      is_image_content_type,
-      is_valid_community_name,
-      is_valid_username,
-      scrape_text_for_mentions,
-  };
-
-  #[test]
-  fn test_mentions_regex() {
-    let text = "Just read a great blog post by [@tedu@honk.teduangst.com](/u/test). And another by !test_community@fish.teduangst.com . Another [@lemmy@lemmy-alpha:8540](/u/fish)";
-    let mentions = scrape_text_for_mentions(text);
-
-    assert_eq!(mentions[0].name, "tedu".to_string());
-    assert_eq!(mentions[0].domain, "honk.teduangst.com".to_string());
-    assert_eq!(mentions[1].domain, "lemmy-alpha:8540".to_string());
-  }
-=======
   use crate::is_image_content_type;
->>>>>>> upstream/master
 
   #[test]
   fn test_image() {
     actix_rt::System::new("tset_image").block_on(async move {
-<<<<<<< HEAD
-        let client = actix_web::client::Client::default();
-        assert!(is_image_content_type(&client, "https://1734811051.rsc.cdn77.org/data/images/full/365645/as-virus-kills-navajos-in-their-homes-tribal-women-provide-lifeline.jpg?w=600?w=650").await.is_ok());
-        assert!(is_image_content_type(&client,
-                "https://twitter.com/BenjaminNorton/status/1259922424272957440?s=20"
-        )
-            .await.is_err()
-        );
-      });
-  }
-
-  #[test]
-  fn test_email() {
-    assert!(is_email_regex("gush@gmail.com"));
-    assert!(!is_email_regex("nada_neutho"));
-  }
-
-  #[test]
-  fn test_valid_register_username() {
-    assert!(is_valid_username("Hello_98"));
-    assert!(is_valid_username("ten"));
-    assert!(!is_valid_username("Hello-98"));
-    assert!(!is_valid_username("a"));
-    assert!(!is_valid_username(""));
-  }
-
-  #[test]
-  fn test_valid_community_name() {
-    assert!(is_valid_community_name("example"));
-    assert!(is_valid_community_name("example_community"));
-    assert!(!is_valid_community_name("Example"));
-    assert!(!is_valid_community_name("Ex"));
-    assert!(!is_valid_community_name(""));
-=======
       let client = actix_web::client::Client::default();
       assert!(is_image_content_type(&client, "https://1734811051.rsc.cdn77.org/data/images/full/365645/as-virus-kills-navajos-in-their-homes-tribal-women-provide-lifeline.jpg?w=600?w=650").await.is_ok());
       assert!(is_image_content_type(&client,
@@ -387,20 +242,5 @@ mod tests {
   //   let res_other = fetch_pictshare("https://upload.wikimedia.org/wikipedia/en/2/27/The_Mandalorian_logo.jpgaoeu");
   //   assert!(res_other.is_err());
   // }
-
-  // #[test]
-  // fn test_send_email() {
-  //  let result =  send_email("not a subject", "test_email@gmail.com", "ur user", "<h1>HI there</h1>");
-  //   assert!(result.is_ok());
-  // }
 }
 
-lazy_static! {
-  static ref EMAIL_REGEX: Regex = Regex::new(r"^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$").unwrap();
-  static ref USERNAME_MATCHES_REGEX: Regex = Regex::new(r"/u/[a-zA-Z][0-9a-zA-Z_]*").unwrap();
-  // TODO keep this old one, it didn't work with port well tho
-  // static ref WEBFINGER_USER_REGEX: Regex = Regex::new(r"@(?P<name>[\w.]+)@(?P<domain>[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)").unwrap();
-  static ref WEBFINGER_USER_REGEX: Regex = Regex::new(r"@(?P<name>[\w.]+)@(?P<domain>[a-zA-Z0-9._:-]+)").unwrap();
-  static ref VALID_USERNAME_REGEX: Regex = Regex::new(r"^[a-zA-Z0-9_]{3,20}$").unwrap();
-  static ref VALID_COMMUNITY_NAME_REGEX: Regex = Regex::new(r"^[a-z0-9_]{3,20}$").unwrap();
-}
