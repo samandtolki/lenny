@@ -303,19 +303,6 @@ impl Perform for Oper<EditComment> {
     let edit_id = data.edit_id;
     let read_comment = blocking(pool, move |conn| Comment::read(conn, edit_id)).await??;
 
-<<<<<<< HEAD
-    let comment_form = CommentForm {
-      content: data.content.to_owned(),
-      parent_id: data.parent_id,
-      post_id: data.post_id,
-      creator_id: data.creator_id,
-      removed: data.removed.to_owned(),
-      deleted: data.deleted.to_owned(),
-      read: data.read.to_owned(),
-      published: None,
-      updated: if data.read.is_some() {
-        orig_comment.updated
-=======
     let comment_form = {
       if data.read.is_none() {
         // the ban etc checks should been made and have passed
@@ -339,7 +326,6 @@ impl Perform for Oper<EditComment> {
           ap_id: read_comment.ap_id,
           local: read_comment.local,
         }
->>>>>>> upstream/master
       } else {
         // the only field that can be updated it the read field
         CommentForm {
