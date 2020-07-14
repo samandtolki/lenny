@@ -314,7 +314,7 @@ impl Perform for Oper<EditComment> {
         };
 
         CommentForm {
-          content: read_comment.content,
+          content: read_comment.content.to_owned(),
           parent_id: read_comment.parent_id,
           post_id: read_comment.post_id,
           creator_id: read_comment.creator_id,
@@ -329,7 +329,7 @@ impl Perform for Oper<EditComment> {
       } else {
         // the only field that can be updated it the read field
         CommentForm {
-          content: read_comment.content,
+          content: read_comment.content.to_owned(),
           parent_id: read_comment.parent_id,
           post_id: read_comment.post_id,
           creator_id: read_comment.creator_id,
