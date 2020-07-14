@@ -282,19 +282,6 @@ export class Post extends Component<any, PostState> {
         <div class="btn-group btn-group-toggle mb-2">
           <label
             className={`btn btn-sm btn-secondary pointer ${
-              this.state.commentViewType === CommentViewType.Tree && 'active'
-            }`}
-          >
-            {i18n.t('tree')}
-            <input
-              type="radio"
-              value={CommentViewType.Tree}
-              checked={this.state.commentViewType === CommentViewType.Tree}
-              onChange={linkEvent(this, this.handleCommentViewTypeChange)}
-            />
-          </label>
-          <label
-            className={`btn btn-sm btn-secondary pointer ${
               this.state.commentViewType === CommentViewType.Chat && 'active'
             }`}
           >
@@ -345,11 +332,13 @@ export class Post extends Component<any, PostState> {
 
   handleCommentSortChange(i: Post, event: any) {
     i.state.commentSort = Number(event.target.value);
+    i.state.commentViewType = CommentViewType.Tree;
     i.setState(i.state);
   }
 
   handleCommentViewTypeChange(i: Post, event: any) {
     i.state.commentViewType = Number(event.target.value);
+    i.state.commentSort = CommentSortType.New;
     i.setState(i.state);
   }
 
