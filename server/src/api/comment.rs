@@ -327,7 +327,7 @@ impl Perform for Oper<EditComment> {
         };
 
         CommentForm {
-          content: content_slurs_removed,
+          content: read_comment.content,
           parent_id: read_comment.parent_id,
           post_id: read_comment.post_id,
           creator_id: read_comment.creator_id,
