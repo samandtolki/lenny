@@ -1,1 +1,1 @@
-export const version: string = 'v0.7.24-lenny';
+export const version: string = 'v0.7.25-lenny';
