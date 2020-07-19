@@ -1,0 +1,8 @@
+image: alpine/edge
+
+sources:
+  - https://github.com/innereq/lenny
+
+tasks:
+  - test: |
+      echo "Hello!"
