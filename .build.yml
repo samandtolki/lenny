@@ -1,5 +1,8 @@
 image: alpine/edge
 
+packages:
+  - podman
+
 sources:
   - https://github.com/innereq/lenny
 
@@ -8,3 +11,5 @@ tasks:
       echo "Hello!"
       whoami
       ls -la
+  - build: |
+      podman run -it --rm -v ./lenny:/lenny gcr.io/kaniko-project/executor:debug --context /lenny --dockerfile /lenny/docker/prod/Dockerfile --no-push --force
