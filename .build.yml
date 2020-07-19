@@ -6,3 +6,5 @@ sources:
 tasks:
   - test: |
       echo "Hello!"
+      whoami
+      ls -la
