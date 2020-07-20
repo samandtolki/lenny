@@ -1,7 +1,7 @@
 build:
   stage: build
   image:
-    name: gcr.io/kaniko-project/executor:debug-v0.19.0
+    name: mgit/base:kaniko-executor-debug-stable
     entrypoint: [""]
   script:
     - echo "{\"auths\":{\"https://lula.moonbutt.science\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
