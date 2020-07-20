@@ -6,10 +6,9 @@ packages:
 sources:
   - https://github.com/innereq/lenny
 
+secrets:
+  - a2e68d5a-6dc3-417e-89b0-fde0d184bdc5
+
 tasks:
-  - test: |
-      echo "Hello!"
-      whoami
-      ls -la
   - build: |
-      podman run -it --rm -v ./lenny:/lenny gcr.io/kaniko-project/executor:debug --context /lenny --dockerfile /lenny/docker/prod/Dockerfile --no-push --force
+      podman run -it --rm -v ./lenny:/lenny -v ./.docker:/kaniko/.docker gcr.io/kaniko-project/executor:debug --force --cache=true --context /lenny --dockerfile /lenny/docker/prod/Dockerfile --destination lula.moonbutt.science/innereq/containers/lenny
