@@ -11,4 +11,4 @@ secrets:
 
 tasks:
   - build: |
-      podman run -it --rm -v ./lenny:/lenny -v ./.docker:/kaniko/.docker gcr.io/kaniko-project/executor:debug --force --cache=true --context /lenny --dockerfile /lenny/docker/prod/Dockerfile --no-push
+      podman run -it --rm -v ./lenny:/lenny -v ./.docker:/kaniko/.docker gcr.io/kaniko-project/executor:debug --force --cache=true --context /lenny --dockerfile /lenny/docker/prod/Dockerfile --destination lula.moonbutt.science/innereq/containers/lenny
