@@ -6,6 +6,8 @@ build:
   script:
     - echo "{\"auths\":{\"https://lula.moonbutt.science\":{\"username\":\"commagray\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --cache=true --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/docker/prod/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  only:
+    - pushes
 
 deploy:
   stage: deploy
