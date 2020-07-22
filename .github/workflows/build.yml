@@ -2,14 +2,13 @@ name: "Continuous Integration"
 
 on: [push, pull_request]
 
+defaults:
+  run:
+    working-directory: server
+
 jobs:
   backend:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        shell: bash
-        working-directory: server
 
     env:
       DATABASE_URL: "postgres://lenny:password@localhost:5432/lenny"
@@ -26,7 +25,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: "Install Rust toolchain"
         uses: actions-rs/toolchain@v1
         with:
