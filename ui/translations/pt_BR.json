@@ -239,5 +239,10 @@
     "site_saved": "Site Salvo.",
     "emoji_picker": "Selecionador de Emoji",
     "select_a_community": "Selecione uma comunidade",
-    "invalid_username": "Nome de usuário inválido."
+    "invalid_username": "Nome de usuário inválido.",
+    "must_login": "Você precisa <1>entrar ou registrar-se</1> para comentar.",
+    "no_password_reset": "Você não conseguirá redefinir sua senha sem um e-mail.",
+    "invalid_post_title": "Título de publicação inválido",
+    "cake_day_info": "Hoje é o dia do bolo de {{ creator_name }}!",
+    "cake_day_title": "Dia do bolo:"
 }

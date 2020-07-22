@@ -240,5 +240,10 @@
     "picture_deleted": "Foto eliminata.",
     "select_a_community": "Seleziona una comunità",
     "invalid_username": "Nome utente non valido.",
-    "what_is": "Cos'è"
+    "what_is": "Cos'è",
+    "must_login": "Devi <1>effettuare l'accesso o registrarti</1> per commentare.",
+    "no_password_reset": "Non sarai in grado di resettare la tua password senza una email.",
+    "cake_day_title": "Cake day:",
+    "cake_day_info": "Oggi è il cake day di {{ creator_name }}!",
+    "invalid_post_title": "Titolo della pubblicazione non valido"
 }
