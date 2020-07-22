@@ -1,4 +1,4 @@
-name: "Build Lenny"
+name: "Continuous Integration"
 
 on: [push, pull_request]
 
@@ -6,8 +6,6 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     
-    container: shtripok/rust-musl-builder:arm
-
     defaults:
       run:
         shell: bash
@@ -23,19 +21,20 @@ jobs:
         image: postgres:alpine
         ports: ['5432:5432']
         env:
-          POSTGRES_USER: "lenny"
-          POSTGRES_PASSWORD: "password"
+          POSTGRES_USER: lenny
+          POSTGRES_PASSWORD: password
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
+      
+      - name: "Install Rust toolchain"
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: "rustfmt, clippy"
+
       - name: "Build backend code"
-        run: |
-          cargo build
-          cargo clippy -- -D clippy::style -D clippy::correctness -D clippy::complexity -D clippy::perf
-          cargo install diesel_cli --no-default-features --features postgres --force
-      - name: "Run backend migrations"
-        run: |
-          diesel migration run
-      - name: "Run backend tests"
-        run: |
-          cargo test --workspace
+        uses: actions-rs/cargo@v1
+        with:
+            command: build
