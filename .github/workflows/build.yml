@@ -1,0 +1,41 @@
+name: "Build Lenny"
+
+on: [push, pull_request]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    
+    container: shtripok/rust-musl-builder:arm
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: server
+
+    env:
+      DATABASE_URL: "postgres://lenny:password@localhost:5432/lenny"
+      LEMMY_DATABASE_URL: "postgres://lenny:password@localhost:5432/lenny"
+      RUST_TEST_THREADS: 1
+    
+    services:
+      db:
+        image: postgres:alpine
+        ports: ['5432:5432']
+        env:
+          POSTGRES_USER: "lenny"
+          POSTGRES_PASSWORD: "password"
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: "Build backend code"
+        run: |
+          cargo build
+          cargo clippy -- -D clippy::style -D clippy::correctness -D clippy::complexity -D clippy::perf
+          cargo install diesel_cli --no-default-features --features postgres --force
+      - name: "Run backend migrations"
+        run: |
+          diesel migration run
+      - name: "Run backend tests"
+        run: |
+          cargo test --workspace

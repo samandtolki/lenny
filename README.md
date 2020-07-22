@@ -49,8 +49,8 @@ To build a production container image:
 podman build -t lenny -f ./docker/prod/Dockerfile .
 ```
 
-To use our container registry:
+To use public container registry:
 
 ```bash
-podman pull lula.moonbutt.science/innereq/containers/lenny
+podman pull quay.io/innereq/lenny
 ```
