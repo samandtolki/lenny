@@ -2,13 +2,13 @@ name: "Continuous Integration"
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: server
-
 jobs:
   backend:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: server
 
     env:
       DATABASE_URL: "postgres://lenny:password@localhost:5432/lenny"
@@ -34,6 +34,7 @@ jobs:
           components: "rustfmt, clippy"
 
       - name: "Build backend code"
-        uses: actions-rs/cargo@v1
-        with:
-            command: build
+        #working-directory: server
+        run: |
+          pwd
+          cargo build
