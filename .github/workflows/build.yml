@@ -49,3 +49,27 @@ jobs:
       - name: "Run backend tests"
         run: |
           cargo test --workspace
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ui
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: "Install Node toolchain"
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+      
+      - name: "Build frontend code"
+        run: |
+          yarn
+          yarn build
+
+      - name: "Lint frontend code"
+        run: |
+          yarn lint
