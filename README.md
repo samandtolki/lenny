@@ -3,6 +3,8 @@
   <h3 align="center">( ͡° ͜ʖ ͡°)</h3>
 </p>
 
+[![](https://github.com/innereq/lenny/workflows/Continuous%20Integration/badge.svg)](https://github.com/innereq/lenny/actions?query=workflow%3A"Continuous+Integration") [![](https://quay.io/repository/innereq/lenny/status)](https://quay.io/repository/innereq/lenny)
+
 **Lenny** is a fork of a link aggregator — [Lemmy](https://github.com/LemmyNet/lemmy). Sadly, it only exist because of disrespectful behavior of the original author.
 
 To maintain stability, this fork has a little no changes, but:
