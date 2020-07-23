@@ -41,7 +41,7 @@ Here is an example how to setup a coding environment:
 ```bash
 git clone https://github.com/innereq/lenny && cd lenny
 podman pull shtripok/rust-musl-builder:arm
-podman run -v ./:/home/rust/src:Z shtripok/rust-musl-builder:arm /bin/bash
+podman run -it --rm -v ./:/home/rust/src:Z shtripok/rust-musl-builder:arm /bin/bash
 cd server && cargo build
 ```
 
