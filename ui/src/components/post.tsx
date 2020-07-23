@@ -8,7 +8,7 @@ import {
   GetPostResponse,
   PostResponse,
   Comment,
-  CommentForm as CommentFormI,
+  MarkCommentAsReadForm,
   CommentResponse,
   CommentSortType,
   CommentViewType,
@@ -167,16 +167,12 @@ export class Post extends Component<any, PostState> {
       UserService.Instance.user &&
       UserService.Instance.user.id == parent_user_id
     ) {
-      let form: CommentFormI = {
-        content: found.content,
+      let form: MarkCommentAsReadForm = {
         edit_id: found.id,
-        creator_id: found.creator_id,
-        post_id: found.post_id,
-        parent_id: found.parent_id,
         read: true,
         auth: null,
       };
-      WebSocketService.Instance.editComment(form);
+      WebSocketService.Instance.markCommentAsRead(form);
       UserService.Instance.user.unreadCount--;
       UserService.Instance.sub.next({
         user: UserService.Instance.user,
@@ -228,7 +224,7 @@ export class Post extends Component<any, PostState> {
       <>
         <div class="btn-group btn-group-toggle mr-3 mb-2">
           <label
-            className={`btn btn-sm btn-secondary pointer ${
+            className={`btn btn-outline-secondary pointer ${
               this.state.commentSort === CommentSortType.Hot && 'active'
             }`}
           >
@@ -241,7 +237,7 @@ export class Post extends Component<any, PostState> {
             />
           </label>
           <label
-            className={`btn btn-sm btn-secondary pointer ${
+            className={`btn btn-outline-secondary pointer ${
               this.state.commentSort === CommentSortType.Top && 'active'
             }`}
           >
@@ -254,7 +250,7 @@ export class Post extends Component<any, PostState> {
             />
           </label>
           <label
-            className={`btn btn-sm btn-secondary pointer ${
+            className={`btn btn-outline-secondary pointer ${
               this.state.commentSort === CommentSortType.New && 'active'
             }`}
           >
@@ -267,7 +263,7 @@ export class Post extends Component<any, PostState> {
             />
           </label>
           <label
-            className={`btn btn-sm btn-secondary pointer ${
+            className={`btn btn-outline-secondary pointer ${
               this.state.commentSort === CommentSortType.Old && 'active'
             }`}
           >
@@ -282,7 +278,7 @@ export class Post extends Component<any, PostState> {
         </div>
         <div class="btn-group btn-group-toggle mb-2">
           <label
-            className={`btn btn-sm btn-secondary pointer ${
+            className={`btn btn-outline-secondary pointer ${
               this.state.commentViewType === CommentViewType.Chat && 'active'
             }`}
           >
@@ -408,7 +404,6 @@ export class Post extends Component<any, PostState> {
       this.state.comments = data.comments;
       this.state.community = data.community;
       this.state.moderators = data.moderators;
-      this.state.siteRes.admins = data.admins;
       this.state.online = data.online;
       this.state.loading = false;
       document.title = `${this.state.post.name} - ${this.state.siteRes.site.name}`;
@@ -435,7 +430,11 @@ export class Post extends Component<any, PostState> {
         this.state.comments.unshift(data.comment);
         this.setState(this.state);
       }
-    } else if (res.op == UserOperation.EditComment) {
+    } else if (
+      res.op == UserOperation.EditComment ||
+      res.op == UserOperation.DeleteComment ||
+      res.op == UserOperation.RemoveComment
+    ) {
       let data = res.data as CommentResponse;
       editCommentRes(data, this.state.comments);
       this.setState(this.state);
@@ -452,7 +451,13 @@ export class Post extends Component<any, PostState> {
       let data = res.data as PostResponse;
       createPostLikeRes(data, this.state.post);
       this.setState(this.state);
-    } else if (res.op == UserOperation.EditPost) {
+    } else if (
+      res.op == UserOperation.EditPost ||
+      res.op == UserOperation.DeletePost ||
+      res.op == UserOperation.RemovePost ||
+      res.op == UserOperation.LockPost ||
+      res.op == UserOperation.StickyPost
+    ) {
       let data = res.data as PostResponse;
       this.state.post = data.post;
       this.setState(this.state);
@@ -462,7 +467,11 @@ export class Post extends Component<any, PostState> {
       this.state.post = data.post;
       this.setState(this.state);
       setupTippy();
-    } else if (res.op == UserOperation.EditCommunity) {
+    } else if (
+      res.op == UserOperation.EditCommunity ||
+      res.op == UserOperation.DeleteCommunity ||
+      res.op == UserOperation.RemoveCommunity
+    ) {
       let data = res.data as CommunityResponse;
       this.state.community = data.community;
       this.state.post.community_id = data.community.id;
@@ -520,7 +529,6 @@ export class Post extends Component<any, PostState> {
       let data = res.data as GetCommunityResponse;
       this.state.community = data.community;
       this.state.moderators = data.moderators;
-      this.state.siteRes.admins = data.admins;
       this.setState(this.state);
     }
   }
