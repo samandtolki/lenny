@@ -39,7 +39,7 @@ Take a look at [`shtripok/rust-musl-builder`](https://hub.docker.com/r/shtripok/
 Here is an example how to setup a coding environment:
 
 ```bash
-git clone https://moonbutt.science/innereq/containers/lenny && cd lenny
+git clone https://github.com/innereq/lenny && cd lenny
 podman pull shtripok/rust-musl-builder:arm
 podman run -v ./:/home/rust/src:Z shtripok/rust-musl-builder:arm /bin/bash
 cd server && cargo build
