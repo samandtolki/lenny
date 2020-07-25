@@ -32,6 +32,7 @@ use lemmy_utils::{
   settings::Settings,
   EndpointType,
   MentionData,
+  fake_remove_slurs,
 };
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -130,8 +131,11 @@ impl Perform for Oper<CreateComment> {
 
     let user_id = claims.id;
 
+    // FIXME: Find a way to delete this shit.
+    let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
+
     let comment_form = CommentForm {
-      content: data.content.to_owned(),
+      content: fake_content_slurs_removed,
       parent_id: data.parent_id.to_owned(),
       post_id: data.post_id,
       creator_id: user_id,
@@ -287,9 +291,11 @@ impl Perform for Oper<EditComment> {
     }
 
     // Do the update
+    // FIXME: Find a way to delete this shit.
+    let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
     let edit_id = data.edit_id;
     let updated_comment = match blocking(pool, move |conn| {
-      Comment::update_content(conn, edit_id, &data.content.to_owned())
+      Comment::update_content(conn, edit_id, &fake_content_slurs_removed)
     })
     .await?
     {

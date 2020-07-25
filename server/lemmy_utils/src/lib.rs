@@ -44,8 +44,9 @@ pub fn convert_datetime(datetime: NaiveDateTime) -> DateTime<FixedOffset> {
   DateTime::<FixedOffset>::from_utc(datetime, *now.offset())
 }
 
-pub fn is_email_regex(test: &str) -> bool {
-  EMAIL_REGEX.is_match(test)
+// FIXME: Find a way to delete this shit.
+pub fn fake_remove_slurs(test: &str) -> String {
+  test.to_string()
 }
 
 pub fn generate_random_string() -> String {
@@ -142,8 +143,8 @@ pub fn is_valid_post_title(title: &str) -> bool {
 mod tests {
   use crate::{
     is_valid_community_name,
-    is_valid_username,
     is_valid_post_title,
+    is_valid_username,
     scrape_text_for_mentions,
   };
 

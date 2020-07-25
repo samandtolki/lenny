@@ -44,6 +44,7 @@ use lemmy_utils::{
   send_email,
   settings::Settings,
   EndpointType,
+  fake_remove_slurs,
 };
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -1129,8 +1130,11 @@ impl Perform for Oper<CreatePrivateMessage> {
       return Err(APIError::err("site_ban").into());
     }
 
+    // FIXME: Find a way to delete this shit.
+    let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
+
     let private_message_form = PrivateMessageForm {
-      content: data.content.to_owned(),
+      content: fake_content_slurs_removed.to_owned(),
       creator_id: user_id,
       recipient_id: data.recipient_id,
       deleted: None,
@@ -1245,9 +1249,11 @@ impl Perform for Oper<EditPrivateMessage> {
     }
 
     // Doing the update
+    // FIXME: Find a way to delete this shit.
+    let fake_content_slurs_removed = fake_remove_slurs(&data.content);
     let edit_id = data.edit_id;
     let updated_private_message = match blocking(pool, move |conn| {
-      PrivateMessage::update_content(conn, edit_id, &data.content)
+      PrivateMessage::update_content(conn, edit_id, &fake_content_slurs_removed)
     })
     .await?
     {

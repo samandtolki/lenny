@@ -1,6 +1,8 @@
 # build folders and similar which are not needed for the docker build
 ui/node_modules
 server/target
+server/lemmy_db/target
+server/lemmy_utils/target
 docker/dev/volumes
 docker/federation/volumes
 docker/federation-test/volumes
