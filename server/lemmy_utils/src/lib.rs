@@ -44,8 +44,9 @@ pub fn convert_datetime(datetime: NaiveDateTime) -> DateTime<FixedOffset> {
   DateTime::<FixedOffset>::from_utc(datetime, *now.offset())
 }
 
-pub fn is_email_regex(test: &str) -> bool {
-  EMAIL_REGEX.is_match(test)
+// FIXME: Find a way to delete this shit.
+pub fn fake_remove_slurs(test: &str) -> String {
+  test.to_string()
 }
 
 pub fn generate_random_string() -> String {
@@ -141,10 +142,9 @@ pub fn is_valid_post_title(title: &str) -> bool {
 #[cfg(test)]
 mod tests {
   use crate::{
-    is_email_regex,
     is_valid_community_name,
-    is_valid_username,
     is_valid_post_title,
+    is_valid_username,
     scrape_text_for_mentions,
   };
 
@@ -156,12 +156,6 @@ mod tests {
     assert_eq!(mentions[0].name, "tedu".to_string());
     assert_eq!(mentions[0].domain, "honk.teduangst.com".to_string());
     assert_eq!(mentions[1].domain, "lemmy-alpha:8540".to_string());
-  }
-
-  #[test]
-  fn test_email() {
-    assert!(is_email_regex("gush@gmail.com"));
-    assert!(!is_email_regex("nada_neutho"));
   }
 
   #[test]

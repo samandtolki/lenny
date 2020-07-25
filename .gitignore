@@ -16,3 +16,7 @@ ui/src/translations
 
 # ide config
 .idea/
+
+server/src/target
+server/lemmy_db/target
+server/lemmy_utils/target
