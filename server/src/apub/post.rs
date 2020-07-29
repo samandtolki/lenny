@@ -33,7 +33,7 @@ use lemmy_db::{
   user::User_,
   Crud,
 };
-use lemmy_utils::{convert_datetime, get_apub_protocol_string, settings::Settings};
+use lemmy_utils::convert_datetime;
 use serde::Deserialize;
 use url::Url;
 
@@ -114,15 +114,8 @@ impl ToApub for Post {
     }
 
     if let Some(thumbnail_url) = &self.thumbnail_url {
-      let full_url = format!(
-        "{}://{}/pictshare/{}",
-        get_apub_protocol_string(),
-        Settings::get().hostname,
-        thumbnail_url
-      );
-
       let mut image = Image::new();
-      image.set_url(full_url);
+      image.set_url(thumbnail_url.to_string());
       page.set_image(image.into_any_base()?);
     }
 
@@ -133,6 +126,7 @@ impl ToApub for Post {
     let ext = PageExtension {
       comments_enabled: !self.locked,
       sensitive: self.nsfw,
+      stickied: self.stickied,
     };
     Ok(Ext1::new(page, ext))
   }
@@ -244,7 +238,7 @@ impl FromApub for PostForm {
         .map(|u| u.to_owned().naive_local()),
       deleted: None,
       nsfw: ext.sensitive,
-      stickied: None, // -> put it in "featured" collection of the community
+      stickied: Some(ext.stickied),
       embed_title,
       embed_description,
       embed_html,
