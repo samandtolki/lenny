@@ -222,6 +222,7 @@ export class Main extends Component<any, MainState> {
             <div class="card bg-transparent border-secondary mb-3">
               <div class="card-body">{this.sidebar()}</div>
             </div>
+          </div>
         )}
       </div>
     );
