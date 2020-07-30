@@ -245,5 +245,6 @@
     "admin_settings": "Ustawienia Administratora",
     "emoji_picker": "Wybór Emoji",
     "select_a_community": "Wybierz społeczność",
-    "invalid_username": "Nieprawidłowa nazwa użytkownika."
+    "invalid_username": "Nieprawidłowa nazwa użytkownika.",
+    "invalid_community_name": "Niepoprawna nazwa."
 }
