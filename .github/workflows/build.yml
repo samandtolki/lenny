@@ -48,6 +48,7 @@ jobs:
 
       - name: "Run backend tests"
         run: |
+          sudo apt-get install espeak
           cargo test --workspace
 
   frontend:
