@@ -30,8 +30,9 @@ import {
   messageToastify,
   md,
   setTheme,
+  getLanguage,
 } from '../utils';
-import { i18n, i18nextSetup } from '../i18next';
+import { i18n } from '../i18next';
 
 interface NavbarState {
   isLoggedIn: boolean;
@@ -424,11 +425,10 @@ export class Navbar extends Component<any, NavbarState> {
           this.requestNotificationPermission();
           this.fetchUnreads();
           setTheme(data.my_user.theme, true);
+          i18n.changeLanguage(getLanguage());
         }
         this.state.isLoggedIn = true;
       }
-
-      i18nextSetup();
 
       this.state.siteLoading = false;
       this.setState(this.state);

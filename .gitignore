@@ -20,3 +20,5 @@ ui/src/translations
 server/src/target
 server/lemmy_db/target
 server/lemmy_utils/target
+
+target

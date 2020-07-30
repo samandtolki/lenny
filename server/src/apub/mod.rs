@@ -1,14 +1,12 @@
 pub mod activities;
 pub mod comment;
 pub mod community;
-pub mod community_inbox;
 pub mod extensions;
 pub mod fetcher;
+pub mod inbox;
 pub mod post;
 pub mod private_message;
-pub mod shared_inbox;
 pub mod user;
-pub mod user_inbox;
 
 use crate::{
   apub::extensions::{
@@ -103,17 +101,20 @@ pub trait ToApub {
 }
 
 /// Updated is actually the deletion time
-fn create_tombstone(
+fn create_tombstone<T>(
   deleted: bool,
   object_id: &str,
   updated: Option<NaiveDateTime>,
-  former_type: String,
-) -> Result<Tombstone, LemmyError> {
+  former_type: T,
+) -> Result<Tombstone, LemmyError>
+where
+  T: ToString,
+{
   if deleted {
     if let Some(updated) = updated {
       let mut tombstone = Tombstone::new();
       tombstone.set_id(object_id.parse()?);
-      tombstone.set_former_type(former_type);
+      tombstone.set_former_type(former_type.to_string());
       tombstone.set_deleted(convert_datetime(updated));
       Ok(tombstone)
     } else {
@@ -131,7 +132,6 @@ pub trait FromApub {
     apub: &Self::ApubType,
     client: &Client,
     pool: &DbPool,
-    actor_id: &Url,
   ) -> Result<Self, LemmyError>
   where
     Self: Sized;
@@ -219,6 +219,9 @@ pub trait ActorType {
   fn public_key(&self) -> String;
   fn private_key(&self) -> String;
 
+  /// numeric id in the database, used for insert_activity
+  fn user_id(&self) -> i32;
+
   // These two have default impls, since currently a community can't follow anything,
   // and a user can't be followed (yet)
   #[allow(unused_variables)]
@@ -277,8 +280,8 @@ pub trait ActorType {
   }
 
   // TODO move these to the db rows
-  fn get_inbox_url(&self) -> String {
-    format!("{}/inbox", &self.actor_id_str())
+  fn get_inbox_url(&self) -> Result<Url, ParseError> {
+    Url::parse(&format!("{}/inbox", &self.actor_id_str()))
   }
 
   // TODO: make this return `Result<Url, ParseError>
@@ -286,8 +289,8 @@ pub trait ActorType {
     get_shared_inbox(&self.actor_id().unwrap())
   }
 
-  fn get_outbox_url(&self) -> String {
-    format!("{}/outbox", &self.actor_id_str())
+  fn get_outbox_url(&self) -> Result<Url, ParseError> {
+    Url::parse(&format!("{}/outbox", &self.actor_id_str()))
   }
 
   fn get_followers_url(&self) -> String {
