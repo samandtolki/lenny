@@ -589,6 +589,9 @@ export function messageToastify(
 
 export function setupTribute(): Tribute {
   return new Tribute({
+    noMatchTemplate: function () {
+      return '';
+    },
     collection: [
       // Emojis
       {
@@ -670,7 +673,7 @@ function userSearch(text: string, cb: any) {
 
     WebSocketService.Instance.search(form);
 
-    this.userSub = WebSocketService.Instance.subject.subscribe(
+    let userSub = WebSocketService.Instance.subject.subscribe(
       msg => {
         let res = wsJsonToRes(msg);
         if (res.op == UserOperation.Search) {
@@ -684,7 +687,7 @@ function userSearch(text: string, cb: any) {
             };
           });
           cb(users);
-          this.userSub.unsubscribe();
+          userSub.unsubscribe();
         }
       },
       err => console.error(err),
@@ -707,7 +710,7 @@ function communitySearch(text: string, cb: any) {
 
     WebSocketService.Instance.search(form);
 
-    this.communitySub = WebSocketService.Instance.subject.subscribe(
+    let communitySub = WebSocketService.Instance.subject.subscribe(
       msg => {
         let res = wsJsonToRes(msg);
         if (res.op == UserOperation.Search) {
@@ -721,7 +724,7 @@ function communitySearch(text: string, cb: any) {
             };
           });
           cb(communities);
-          this.communitySub.unsubscribe();
+          communitySub.unsubscribe();
         }
       },
       err => console.error(err),

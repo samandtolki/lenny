@@ -16,6 +16,7 @@ ui/src/translations
 
 # ide config
 .idea/
+.vscode/
 
 server/src/target
 server/lemmy_db/target

@@ -208,6 +208,7 @@
     "yes": "yes",
     "no": "no",
     "not_logged_in": "Not logged in.",
+    "bio_length_overflow": "User bio cannot exceed 300 characters!",
     "logged_in": "Logged in.",
     "must_login": "You must <1>log in or register</1> to comment.",
     "site_saved": "Site Saved.",
@@ -263,5 +264,6 @@
     "cake_day_info": "It's {{ creator_name }}'s cake day today!",
     "invalid_post_title": "Invalid post title",
     "invalid_url": "Invalid URL.",
-    "play_captcha_audio": "Play Captcha Audio"
+    "play_captcha_audio": "Play Captcha Audio",
+    "bio": "Bio"
 }
