@@ -12,13 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Set release environment variable
+        run: echo ::set-env name=RELEASE_VERSION::${GITHUB_REF#refs/tags/}
+
       - name: Create release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
+          release_name: ${{ env.RELEASE_VERSION }}
           body: |
             # Changes
 
@@ -26,4 +29,4 @@ jobs:
 
             # Usage
 
-            Container image: `podman pull quay.io/innereq/lenny:${{ github.ref }}`.
+            Container image: `podman pull quay.io/innereq/lenny:${{ env.RELEASE_VERSION }}`.
