@@ -1,8 +1,6 @@
 use super::user::Register;
 use crate::{
   api::{
-    check_slurs,
-    check_slurs_opt,
     get_user_from_jwt,
     get_user_from_jwt_opt,
     is_admin,

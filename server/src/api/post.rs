@@ -1,8 +1,6 @@
 use crate::{
   api::{
     check_community_ban,
-    check_slurs,
-    check_slurs_opt,
     get_user_from_jwt,
     get_user_from_jwt_opt,
     is_mod_or_admin,

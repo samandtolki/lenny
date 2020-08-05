@@ -1,6 +1,5 @@
 use crate::{
   api::{
-    check_slurs,
     claims::Claims,
     get_user_from_jwt,
     get_user_from_jwt_opt,
@@ -1188,6 +1187,7 @@ impl Perform for Oper<CreatePrivateMessage> {
 
     let hostname = &format!("https://{}", Settings::get().hostname);
 
+    // FIXME: Find a way to delete this shit.
     let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
 
     let private_message_form = PrivateMessageForm {
