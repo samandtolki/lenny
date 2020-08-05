@@ -119,7 +119,7 @@ impl Post {
   ) -> Result<Self, Error> {
     use crate::schema::post::dsl::*;
     diesel::update(post.find(post_id))
-      .set(deleted.eq(new_deleted))
+      .set((deleted.eq(new_deleted), updated.eq(naive_now())))
       .get_result::<Self>(conn)
   }
 
@@ -130,7 +130,7 @@ impl Post {
   ) -> Result<Self, Error> {
     use crate::schema::post::dsl::*;
     diesel::update(post.find(post_id))
-      .set(removed.eq(new_removed))
+      .set((removed.eq(new_removed), updated.eq(naive_now())))
       .get_result::<Self>(conn)
   }
 
@@ -316,6 +316,7 @@ mod tests {
       email: None,
       matrix_user_id: None,
       avatar: None,
+      banner: None,
       admin: false,
       banned: false,
       updated: None,
@@ -352,6 +353,8 @@ mod tests {
       public_key: None,
       last_refreshed_at: None,
       published: None,
+      icon: None,
+      banner: None,
     };
 
     let inserted_community = Community::create(&conn, &new_community).unwrap();

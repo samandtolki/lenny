@@ -1,5 +1,15 @@
 use crate::{
-  api::{claims::Claims, is_mod_or_admin, APIError, Oper, Perform},
+  api::{
+    check_community_ban,
+    check_slurs,
+    check_slurs_opt,
+    get_user_from_jwt,
+    get_user_from_jwt_opt,
+    is_mod_or_admin,
+    APIError,
+    Oper,
+    Perform,
+  },
   apub::{ApubLikeableType, ApubObjectType},
   blocking,
   fetch_iframely_and_pictrs_data,
@@ -19,18 +29,13 @@ use lemmy_db::{
   post::*,
   post_view::*,
   site_view::*,
-  user::*,
   Crud,
   Likeable,
   ListingType,
   Saveable,
   SortType,
 };
-use lemmy_utils::{
-  is_valid_post_title,
-  make_apub_endpoint,
-  EndpointType,
-};
+use lemmy_utils::{is_valid_post_title, make_apub_endpoint, EndpointType};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use url::Url;
@@ -144,31 +149,13 @@ impl Perform for Oper<CreatePost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &CreatePost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     if !is_valid_post_title(&data.name) {
       return Err(APIError::err("invalid_post_title").into());
     }
 
-    let user_id = claims.id;
-
-    // Check for a community ban
-    let community_id = data.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    check_community_ban(user.id, data.community_id, pool).await?;
 
     if let Some(url) = data.url.as_ref() {
       match Url::parse(url) {
@@ -186,7 +173,7 @@ impl Perform for Oper<CreatePost> {
       url: data.url.to_owned(),
       body: data.body.to_owned(),
       community_id: data.community_id,
-      creator_id: user_id,
+      creator_id: user.id,
       removed: None,
       deleted: None,
       nsfw: data.nsfw,
@@ -232,7 +219,7 @@ impl Perform for Oper<CreatePost> {
     // They like their own post by default
     let like_form = PostLikeForm {
       post_id: inserted_post.id,
-      user_id,
+      user_id: user.id,
       score: 1,
     };
 
@@ -246,7 +233,7 @@ impl Perform for Oper<CreatePost> {
     // Refetch the view
     let inserted_post_id = inserted_post.id;
     let post_view = match blocking(pool, move |conn| {
-      PostView::read(conn, inserted_post_id, Some(user_id))
+      PostView::read(conn, inserted_post_id, Some(user.id))
     })
     .await?
     {
@@ -278,17 +265,8 @@ impl Perform for Oper<GetPost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetPostResponse, LemmyError> {
     let data: &GetPost = &self.data;
-
-    let user_id: Option<i32> = match &data.auth {
-      Some(auth) => match Claims::decode(&auth) {
-        Ok(claims) => {
-          let user_id = claims.claims.id;
-          Some(user_id)
-        }
-        Err(_e) => None,
-      },
-      None => None,
-    };
+    let user = get_user_from_jwt_opt(&data.auth, pool).await?;
+    let user_id = user.map(|u| u.id);
 
     let id = data.id;
     let post_view = match blocking(pool, move |conn| PostView::read(conn, id, user_id)).await? {
@@ -357,19 +335,7 @@ impl Perform for Oper<GetPosts> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetPostsResponse, LemmyError> {
     let data: &GetPosts = &self.data;
-
-    // For logged in users, you need to get back subscribed, and settings
-    let user: Option<User_> = match &data.auth {
-      Some(auth) => match Claims::decode(&auth) {
-        Ok(claims) => {
-          let user_id = claims.claims.id;
-          let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-          Some(user)
-        }
-        Err(_e) => None,
-      },
-      None => None,
-    };
+    let user = get_user_from_jwt_opt(&data.auth, pool).await?;
 
     let user_id = match &user {
       Some(user) => Some(user.id),
@@ -434,13 +400,7 @@ impl Perform for Oper<CreatePostLike> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &CreatePostLike = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Don't do a downvote if site has downvotes disabled
     if data.score == -1 {
@@ -454,22 +414,11 @@ impl Perform for Oper<CreatePostLike> {
     let post_id = data.post_id;
     let post = blocking(pool, move |conn| Post::read(conn, post_id)).await??;
 
-    let community_id = post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    check_community_ban(user.id, post.community_id, pool).await?;
 
     let like_form = PostLikeForm {
       post_id: data.post_id,
-      user_id,
+      user_id: user.id,
       score: data.score,
     };
 
@@ -496,6 +445,7 @@ impl Perform for Oper<CreatePostLike> {
     }
 
     let post_id = data.post_id;
+    let user_id = user.id;
     let post_view = match blocking(pool, move |conn| {
       PostView::read(conn, post_id, Some(user_id))
     })
@@ -529,37 +479,19 @@ impl Perform for Oper<EditPost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &EditPost = &self.data;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     if !is_valid_post_title(&data.name) {
       return Err(APIError::err("invalid_post_title").into());
     }
 
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
     let edit_id = data.edit_id;
     let orig_post = blocking(pool, move |conn| Post::read(conn, edit_id)).await??;
 
-    // Check for a community ban
-    let community_id = orig_post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    check_community_ban(user.id, orig_post.community_id, pool).await?;
 
     // Verify that only the creator can edit
-    if !Post::is_post_creator(user_id, orig_post.creator_id) {
+    if !Post::is_post_creator(user.id, orig_post.creator_id) {
       return Err(APIError::err("no_post_edit_allowed").into());
     }
 
@@ -608,7 +540,7 @@ impl Perform for Oper<EditPost> {
 
     let edit_id = data.edit_id;
     let post_view = blocking(pool, move |conn| {
-      PostView::read(conn, edit_id, Some(user_id))
+      PostView::read(conn, edit_id, Some(user.id))
     })
     .await??;
 
@@ -636,33 +568,15 @@ impl Perform for Oper<DeletePost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &DeletePost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_post = blocking(pool, move |conn| Post::read(conn, edit_id)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_post.community_id, pool).await?;
 
     // Verify that only the creator can delete
-    if !Post::is_post_creator(user_id, orig_post.creator_id) {
+    if !Post::is_post_creator(user.id, orig_post.creator_id) {
       return Err(APIError::err("no_post_edit_allowed").into());
     }
 
@@ -686,7 +600,7 @@ impl Perform for Oper<DeletePost> {
     // Refetch the post
     let edit_id = data.edit_id;
     let post_view = blocking(pool, move |conn| {
-      PostView::read(conn, edit_id, Some(user_id))
+      PostView::read(conn, edit_id, Some(user.id))
     })
     .await??;
 
@@ -714,33 +628,15 @@ impl Perform for Oper<RemovePost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &RemovePost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_post = blocking(pool, move |conn| Post::read(conn, edit_id)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_post.community_id, pool).await?;
 
     // Verify that only the mods can remove
-    is_mod_or_admin(pool, user_id, community_id).await?;
+    is_mod_or_admin(pool, user.id, orig_post.community_id).await?;
 
     // Update the post
     let edit_id = data.edit_id;
@@ -752,7 +648,7 @@ impl Perform for Oper<RemovePost> {
 
     // Mod tables
     let form = ModRemovePostForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       post_id: data.edit_id,
       removed: Some(removed),
       reason: data.reason.to_owned(),
@@ -770,6 +666,7 @@ impl Perform for Oper<RemovePost> {
 
     // Refetch the post
     let edit_id = data.edit_id;
+    let user_id = user.id;
     let post_view = blocking(pool, move |conn| {
       PostView::read(conn, edit_id, Some(user_id))
     })
@@ -799,33 +696,15 @@ impl Perform for Oper<LockPost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &LockPost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_post = blocking(pool, move |conn| Post::read(conn, edit_id)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_post.community_id, pool).await?;
 
     // Verify that only the mods can lock
-    is_mod_or_admin(pool, user_id, community_id).await?;
+    is_mod_or_admin(pool, user.id, orig_post.community_id).await?;
 
     // Update the post
     let edit_id = data.edit_id;
@@ -835,7 +714,7 @@ impl Perform for Oper<LockPost> {
 
     // Mod tables
     let form = ModLockPostForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       post_id: data.edit_id,
       locked: Some(locked),
     };
@@ -847,7 +726,7 @@ impl Perform for Oper<LockPost> {
     // Refetch the post
     let edit_id = data.edit_id;
     let post_view = blocking(pool, move |conn| {
-      PostView::read(conn, edit_id, Some(user_id))
+      PostView::read(conn, edit_id, Some(user.id))
     })
     .await??;
 
@@ -875,33 +754,15 @@ impl Perform for Oper<StickyPost> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &StickyPost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_post = blocking(pool, move |conn| Post::read(conn, edit_id)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_post.community_id, pool).await?;
 
     // Verify that only the mods can sticky
-    is_mod_or_admin(pool, user_id, community_id).await?;
+    is_mod_or_admin(pool, user.id, orig_post.community_id).await?;
 
     // Update the post
     let edit_id = data.edit_id;
@@ -913,7 +774,7 @@ impl Perform for Oper<StickyPost> {
 
     // Mod tables
     let form = ModStickyPostForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       post_id: data.edit_id,
       stickied: Some(stickied),
     };
@@ -926,7 +787,7 @@ impl Perform for Oper<StickyPost> {
     // Refetch the post
     let edit_id = data.edit_id;
     let post_view = blocking(pool, move |conn| {
-      PostView::read(conn, edit_id, Some(user_id))
+      PostView::read(conn, edit_id, Some(user.id))
     })
     .await??;
 
@@ -954,17 +815,11 @@ impl Perform for Oper<SavePost> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<PostResponse, LemmyError> {
     let data: &SavePost = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let post_saved_form = PostSavedForm {
       post_id: data.post_id,
-      user_id,
+      user_id: user.id,
     };
 
     if data.save {
@@ -980,6 +835,7 @@ impl Perform for Oper<SavePost> {
     }
 
     let post_id = data.post_id;
+    let user_id = user.id;
     let post_view = blocking(pool, move |conn| {
       PostView::read(conn, post_id, Some(user_id))
     })

@@ -1,5 +1,13 @@
 use crate::{
-  api::{claims::Claims, is_mod_or_admin, APIError, Oper, Perform},
+  api::{
+    check_community_ban,
+    get_user_from_jwt,
+    get_user_from_jwt_opt,
+    is_mod_or_admin,
+    APIError,
+    Oper,
+    Perform,
+  },
   apub::{ApubLikeableType, ApubObjectType},
   blocking,
   websocket::{
@@ -13,7 +21,6 @@ use crate::{
 use lemmy_db::{
   comment::*,
   comment_view::*,
-  community_view::*,
   moderator::*,
   post::*,
   site_view::*,
@@ -123,13 +130,7 @@ impl Perform for Oper<CreateComment> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &CreateComment = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // FIXME: Find a way to delete this shit.
     let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
@@ -138,7 +139,7 @@ impl Perform for Oper<CreateComment> {
       content: fake_content_slurs_removed,
       parent_id: data.parent_id.to_owned(),
       post_id: data.post_id,
-      creator_id: user_id,
+      creator_id: user.id,
       removed: None,
       deleted: None,
       read: None,
@@ -152,18 +153,7 @@ impl Perform for Oper<CreateComment> {
     let post_id = data.post_id;
     let post = blocking(pool, move |conn| Post::read(conn, post_id)).await??;
 
-    let community_id = post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(&conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    check_community_ban(user.id, post.community_id, pool).await?;
 
     // Check if post is locked, no new comments
     if post.locked {
@@ -204,7 +194,7 @@ impl Perform for Oper<CreateComment> {
     let like_form = CommentLikeForm {
       comment_id: inserted_comment.id,
       post_id: data.post_id,
-      user_id,
+      user_id: user.id,
       score: 1,
     };
 
@@ -215,6 +205,7 @@ impl Perform for Oper<CreateComment> {
 
     updated_comment.send_like(&user, &self.client, pool).await?;
 
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(&conn, inserted_comment.id, Some(user_id))
     })
@@ -252,34 +243,16 @@ impl Perform for Oper<EditComment> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &EditComment = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_comment =
       blocking(pool, move |conn| CommentView::read(&conn, edit_id, None)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_comment.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_comment.community_id, pool).await?;
 
     // Verify that only the creator can edit
-    if user_id != orig_comment.creator_id {
+    if user.id != orig_comment.creator_id {
       return Err(APIError::err("no_comment_edit_allowed").into());
     }
 
@@ -311,6 +284,7 @@ impl Perform for Oper<EditComment> {
       send_local_notifs(mentions, updated_comment, &user, post, pool, false).await?;
 
     let edit_id = data.edit_id;
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(conn, edit_id, Some(user_id))
     })
@@ -348,34 +322,16 @@ impl Perform for Oper<DeleteComment> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &DeleteComment = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_comment =
       blocking(pool, move |conn| CommentView::read(&conn, edit_id, None)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_comment.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_comment.community_id, pool).await?;
 
     // Verify that only the creator can delete
-    if user_id != orig_comment.creator_id {
+    if user.id != orig_comment.creator_id {
       return Err(APIError::err("no_comment_edit_allowed").into());
     }
 
@@ -403,6 +359,7 @@ impl Perform for Oper<DeleteComment> {
 
     // Refetch it
     let edit_id = data.edit_id;
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(conn, edit_id, Some(user_id))
     })
@@ -447,34 +404,16 @@ impl Perform for Oper<RemoveComment> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &RemoveComment = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_comment =
       blocking(pool, move |conn| CommentView::read(&conn, edit_id, None)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_comment.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_comment.community_id, pool).await?;
 
     // Verify that only a mod or admin can remove
-    is_mod_or_admin(pool, user_id, community_id).await?;
+    is_mod_or_admin(pool, user.id, orig_comment.community_id).await?;
 
     // Do the remove
     let removed = data.removed;
@@ -489,7 +428,7 @@ impl Perform for Oper<RemoveComment> {
 
     // Mod tables
     let form = ModRemoveCommentForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       comment_id: data.edit_id,
       removed: Some(removed),
       reason: data.reason.to_owned(),
@@ -509,6 +448,7 @@ impl Perform for Oper<RemoveComment> {
 
     // Refetch it
     let edit_id = data.edit_id;
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(conn, edit_id, Some(user_id))
     })
@@ -553,31 +493,13 @@ impl Perform for Oper<MarkCommentAsRead> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &MarkCommentAsRead = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
     let orig_comment =
       blocking(pool, move |conn| CommentView::read(&conn, edit_id, None)).await??;
 
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
-
-    // Check for a community ban
-    let community_id = orig_comment.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
+    check_community_ban(user.id, orig_comment.community_id, pool).await?;
 
     // Verify that only the recipient can mark as read
     // Needs to fetch the parent comment / post to get the recipient
@@ -586,14 +508,14 @@ impl Perform for Oper<MarkCommentAsRead> {
       Some(pid) => {
         let parent_comment =
           blocking(pool, move |conn| CommentView::read(&conn, pid, None)).await??;
-        if user_id != parent_comment.creator_id {
+        if user.id != parent_comment.creator_id {
           return Err(APIError::err("no_comment_edit_allowed").into());
         }
       }
       None => {
         let parent_post_id = orig_comment.post_id;
         let parent_post = blocking(pool, move |conn| Post::read(conn, parent_post_id)).await??;
-        if user_id != parent_post.creator_id {
+        if user.id != parent_post.creator_id {
           return Err(APIError::err("no_comment_edit_allowed").into());
         }
       }
@@ -608,6 +530,7 @@ impl Perform for Oper<MarkCommentAsRead> {
 
     // Refetch it
     let edit_id = data.edit_id;
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(conn, edit_id, Some(user_id))
     })
@@ -633,17 +556,11 @@ impl Perform for Oper<SaveComment> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &SaveComment = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let comment_saved_form = CommentSavedForm {
       comment_id: data.comment_id,
-      user_id,
+      user_id: user.id,
     };
 
     if data.save {
@@ -659,6 +576,7 @@ impl Perform for Oper<SaveComment> {
     }
 
     let comment_id = data.comment_id;
+    let user_id = user.id;
     let comment_view = blocking(pool, move |conn| {
       CommentView::read(conn, comment_id, Some(user_id))
     })
@@ -682,13 +600,7 @@ impl Perform for Oper<CreateCommentLike> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<CommentResponse, LemmyError> {
     let data: &CreateCommentLike = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let mut recipient_ids = Vec::new();
 
@@ -704,21 +616,9 @@ impl Perform for Oper<CreateCommentLike> {
     let orig_comment =
       blocking(pool, move |conn| CommentView::read(&conn, comment_id, None)).await??;
 
-    // Check for a community ban
     let post_id = orig_comment.post_id;
     let post = blocking(pool, move |conn| Post::read(conn, post_id)).await??;
-    let community_id = post.community_id;
-    let is_banned =
-      move |conn: &'_ _| CommunityUserBanView::get(conn, user_id, community_id).is_ok();
-    if blocking(pool, is_banned).await? {
-      return Err(APIError::err("community_ban").into());
-    }
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    check_community_ban(user.id, post.community_id, pool).await?;
 
     let comment_id = data.comment_id;
     let comment = blocking(pool, move |conn| Comment::read(conn, comment_id)).await??;
@@ -727,7 +627,7 @@ impl Perform for Oper<CreateCommentLike> {
     match comment.parent_id {
       Some(parent_id) => {
         let parent_comment = blocking(pool, move |conn| Comment::read(conn, parent_id)).await??;
-        if parent_comment.creator_id != user_id {
+        if parent_comment.creator_id != user.id {
           let parent_user = blocking(pool, move |conn| {
             User_::read(conn, parent_comment.creator_id)
           })
@@ -743,7 +643,7 @@ impl Perform for Oper<CreateCommentLike> {
     let like_form = CommentLikeForm {
       comment_id: data.comment_id,
       post_id,
-      user_id,
+      user_id: user.id,
       score: data.score,
     };
 
@@ -771,6 +671,7 @@ impl Perform for Oper<CreateCommentLike> {
 
     // Have to refetch the comment to get the current state
     let comment_id = data.comment_id;
+    let user_id = user.id;
     let liked_comment = blocking(pool, move |conn| {
       CommentView::read(conn, comment_id, Some(user_id))
     })
@@ -808,19 +709,8 @@ impl Perform for Oper<GetComments> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetCommentsResponse, LemmyError> {
     let data: &GetComments = &self.data;
-
-    let user_claims: Option<Claims> = match &data.auth {
-      Some(auth) => match Claims::decode(&auth) {
-        Ok(claims) => Some(claims.claims),
-        Err(_e) => None,
-      },
-      None => None,
-    };
-
-    let user_id = match &user_claims {
-      Some(claims) => Some(claims.id),
-      None => None,
-    };
+    let user = get_user_from_jwt_opt(&data.auth, pool).await?;
+    let user_id = user.map(|u| u.id);
 
     let type_ = ListingType::from_str(&data.type_)?;
     let sort = SortType::from_str(&data.sort)?;
