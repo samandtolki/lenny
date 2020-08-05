@@ -1,5 +1,13 @@
 use crate::{
-  api::{claims::Claims, is_admin, APIError, Oper, Perform},
+  api::{
+    claims::Claims,
+    get_user_from_jwt,
+    get_user_from_jwt_opt,
+    is_admin,
+    APIError,
+    Oper,
+    Perform,
+  },
   apub::ApubObjectType,
   blocking,
   captcha_espeak_wav_base64,
@@ -19,6 +27,7 @@ use lemmy_db::{
   comment_view::*,
   community::*,
   community_view::*,
+  diesel_option_overwrite,
   moderator::*,
   naive_now,
   password_reset_request::*,
@@ -94,6 +103,8 @@ pub struct SaveUserSettings {
   default_listing_type: i16,
   lang: String,
   avatar: Option<String>,
+  banner: Option<String>,
+  preferred_username: Option<String>,
   email: Option<String>,
   bio: Option<String>,
   matrix_user_id: Option<String>,
@@ -384,6 +395,7 @@ impl Perform for Oper<Register> {
       email: data.email.to_owned(),
       matrix_user_id: None,
       avatar: None,
+      banner: None,
       password_encrypted: data.password.to_owned(),
       preferred_username: None,
       updated: None,
@@ -391,7 +403,7 @@ impl Perform for Oper<Register> {
       banned: false,
       show_nsfw: data.show_nsfw,
       theme: "darkly".into(),
-      default_sort_type: SortType::Hot as i16,
+      default_sort_type: SortType::Active as i16,
       default_listing_type: ListingType::Subscribed as i16,
       lang: "browser".into(),
       show_avatars: true,
@@ -443,6 +455,8 @@ impl Perform for Oper<Register> {
           public_key: Some(main_community_keypair.public_key),
           last_refreshed_at: None,
           published: None,
+          icon: None,
+          banner: None,
         };
         blocking(pool, move |conn| Community::create(conn, &community_form)).await??
       }
@@ -537,14 +551,9 @@ impl Perform for Oper<SaveUserSettings> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &SaveUserSettings = &self.data;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
+    let user_id = user.id;
     let read_user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
 
     let email = match &data.email {
@@ -563,9 +572,13 @@ impl Perform for Oper<SaveUserSettings> {
       None => read_user.bio,
     };
 
-    let avatar = match &data.avatar {
-      Some(avatar) => Some(avatar.to_owned()),
-      None => read_user.avatar,
+    let avatar = diesel_option_overwrite(&data.avatar);
+    let banner = diesel_option_overwrite(&data.banner);
+
+    // The DB constraint should stop too many characters
+    let preferred_username = match &data.preferred_username {
+      Some(preferred_username) => Some(preferred_username.to_owned()),
+      None => read_user.preferred_username,
     };
 
     let password_encrypted = match &data.new_password {
@@ -606,8 +619,9 @@ impl Perform for Oper<SaveUserSettings> {
       email,
       matrix_user_id: data.matrix_user_id.to_owned(),
       avatar,
+      banner,
       password_encrypted,
-      preferred_username: read_user.preferred_username,
+      preferred_username,
       updated: Some(naive_now()),
       admin: read_user.admin,
       banned: read_user.banned,
@@ -659,24 +673,7 @@ impl Perform for Oper<GetUserDetails> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetUserDetailsResponse, LemmyError> {
     let data: &GetUserDetails = &self.data;
-
-    // For logged in users, you need to get back subscribed, and settings
-    let user: Option<User_> = match &data.auth {
-      Some(auth) => match Claims::decode(&auth) {
-        Ok(claims) => {
-          let user_id = claims.claims.id;
-          let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-          Some(user)
-        }
-        Err(_e) => None,
-      },
-      None => None,
-    };
-
-    let user_id = match &user {
-      Some(user) => Some(user.id),
-      None => None,
-    };
+    let user = get_user_from_jwt_opt(&data.auth, pool).await?;
 
     let show_nsfw = match &user {
       Some(user) => user.show_nsfw,
@@ -706,6 +703,7 @@ impl Perform for Oper<GetUserDetails> {
     let limit = data.limit;
     let saved_only = data.saved_only;
     let community_id = data.community_id;
+    let user_id = user.map(|u| u.id);
     let (posts, comments) = blocking(pool, move |conn| {
       let mut posts_query = PostQueryBuilder::create(conn)
         .sort(&sort)
@@ -774,16 +772,10 @@ impl Perform for Oper<AddAdmin> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<AddAdminResponse, LemmyError> {
     let data: &AddAdmin = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Make sure user is an admin
-    is_admin(pool, user_id).await?;
+    is_admin(pool, user.id).await?;
 
     let added = data.added;
     let added_user_id = data.user_id;
@@ -794,7 +786,7 @@ impl Perform for Oper<AddAdmin> {
 
     // Mod tables
     let form = ModAddForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       other_user_id: data.user_id,
       removed: Some(!data.added),
     };
@@ -833,16 +825,10 @@ impl Perform for Oper<BanUser> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<BanUserResponse, LemmyError> {
     let data: &BanUser = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Make sure user is an admin
-    is_admin(pool, user_id).await?;
+    is_admin(pool, user.id).await?;
 
     let ban = data.ban;
     let banned_user_id = data.user_id;
@@ -858,7 +844,7 @@ impl Perform for Oper<BanUser> {
     };
 
     let form = ModBanForm {
-      mod_user_id: user_id,
+      mod_user_id: user.id,
       other_user_id: data.user_id,
       reason: data.reason.to_owned(),
       banned: Some(data.ban),
@@ -897,19 +883,14 @@ impl Perform for Oper<GetReplies> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetRepliesResponse, LemmyError> {
     let data: &GetReplies = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let sort = SortType::from_str(&data.sort)?;
 
     let page = data.page;
     let limit = data.limit;
     let unread_only = data.unread_only;
+    let user_id = user.id;
     let replies = blocking(pool, move |conn| {
       ReplyQueryBuilder::create(conn, user_id)
         .sort(&sort)
@@ -934,19 +915,14 @@ impl Perform for Oper<GetUserMentions> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetUserMentionsResponse, LemmyError> {
     let data: &GetUserMentions = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let sort = SortType::from_str(&data.sort)?;
 
     let page = data.page;
     let limit = data.limit;
     let unread_only = data.unread_only;
+    let user_id = user.id;
     let mentions = blocking(pool, move |conn| {
       UserMentionQueryBuilder::create(conn, user_id)
         .sort(&sort)
@@ -971,19 +947,13 @@ impl Perform for Oper<MarkUserMentionAsRead> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<UserMentionResponse, LemmyError> {
     let data: &MarkUserMentionAsRead = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let user_mention_id = data.user_mention_id;
     let read_user_mention =
       blocking(pool, move |conn| UserMention::read(conn, user_mention_id)).await??;
 
-    if user_id != read_user_mention.recipient_id {
+    if user.id != read_user_mention.recipient_id {
       return Err(APIError::err("couldnt_update_comment").into());
     }
 
@@ -995,6 +965,7 @@ impl Perform for Oper<MarkUserMentionAsRead> {
     };
 
     let user_mention_id = read_user_mention.id;
+    let user_id = user.id;
     let user_mention_view = blocking(pool, move |conn| {
       UserMentionView::read(conn, user_mention_id, user_id)
     })
@@ -1016,14 +987,9 @@ impl Perform for Oper<MarkAllAsRead> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<GetRepliesResponse, LemmyError> {
     let data: &MarkAllAsRead = &self.data;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
+    let user_id = user.id;
     let replies = blocking(pool, move |conn| {
       ReplyQueryBuilder::create(conn, user_id)
         .unread_only(true)
@@ -1070,15 +1036,7 @@ impl Perform for Oper<DeleteAccount> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &DeleteAccount = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Verify the password
     let valid: bool = verify(&data.password, &user.password_encrypted).unwrap_or(false);
@@ -1087,6 +1045,7 @@ impl Perform for Oper<DeleteAccount> {
     }
 
     // Comments
+    let user_id = user.id;
     let comments = blocking(pool, move |conn| {
       CommentQueryBuilder::create(conn)
         .for_creator_id(user_id)
@@ -1224,28 +1183,16 @@ impl Perform for Oper<CreatePrivateMessage> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &CreatePrivateMessage = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let hostname = &format!("https://{}", Settings::get().hostname);
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
 
     // FIXME: Find a way to delete this shit.
     let fake_content_slurs_removed = fake_remove_slurs(&data.content.to_owned());
 
     let private_message_form = PrivateMessageForm {
       content: fake_content_slurs_removed.to_owned(),
-      creator_id: user_id,
+      creator_id: user.id,
       recipient_id: data.recipient_id,
       deleted: None,
       read: None,
@@ -1336,25 +1283,13 @@ impl Perform for Oper<EditPrivateMessage> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &EditPrivateMessage = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
     let orig_private_message =
       blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
-    if user_id != orig_private_message.creator_id {
+    if user.id != orig_private_message.creator_id {
       return Err(APIError::err("no_private_message_edit_allowed").into());
     }
 
@@ -1405,25 +1340,13 @@ impl Perform for Oper<DeletePrivateMessage> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &DeletePrivateMessage = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
     let orig_private_message =
       blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
-    if user_id != orig_private_message.creator_id {
+    if user.id != orig_private_message.creator_id {
       return Err(APIError::err("no_private_message_edit_allowed").into());
     }
 
@@ -1479,25 +1402,13 @@ impl Perform for Oper<MarkPrivateMessageAsRead> {
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &MarkPrivateMessageAsRead = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
-
-    // Check for a site ban
-    let user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
-    if user.banned {
-      return Err(APIError::err("site_ban").into());
-    }
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
     let orig_private_message =
       blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
-    if user_id != orig_private_message.recipient_id {
+    if user.id != orig_private_message.recipient_id {
       return Err(APIError::err("couldnt_update_private_message").into());
     }
 
@@ -1544,13 +1455,8 @@ impl Perform for Oper<GetPrivateMessages> {
     _websocket_info: Option<WebsocketInfo>,
   ) -> Result<PrivateMessagesResponse, LemmyError> {
     let data: &GetPrivateMessages = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user_id = user.id;
 
     let page = data.page;
     let limit = data.limit;
@@ -1574,24 +1480,21 @@ impl Perform for Oper<UserJoin> {
 
   async fn perform(
     &self,
-    _pool: &DbPool,
+    pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
   ) -> Result<UserJoinResponse, LemmyError> {
     let data: &UserJoin = &self.data;
-
-    let claims = match Claims::decode(&data.auth) {
-      Ok(claims) => claims.claims,
-      Err(_e) => return Err(APIError::err("not_logged_in").into()),
-    };
-
-    let user_id = claims.id;
+    let user = get_user_from_jwt(&data.auth, pool).await?;
 
     if let Some(ws) = websocket_info {
       if let Some(id) = ws.id {
-        ws.chatserver.do_send(JoinUserRoom { user_id, id });
+        ws.chatserver.do_send(JoinUserRoom {
+          user_id: user.id,
+          id,
+        });
       }
     }
 
-    Ok(UserJoinResponse { user_id })
+    Ok(UserJoinResponse { user_id: user.id })
   }
 }
