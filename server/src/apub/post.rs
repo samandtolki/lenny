@@ -1,6 +1,7 @@
 use crate::{
   apub::{
     activities::{generate_activity_id, send_activity_to_community},
+    check_actor_domain,
     create_apub_response,
     create_apub_tombstone_response,
     create_tombstone,
@@ -42,7 +43,7 @@ use lemmy_db::{
   user::User_,
   Crud,
 };
-use lemmy_utils::convert_datetime;
+use lemmy_utils::{convert_datetime, fake_remove_slurs};
 use serde::Deserialize;
 use url::Url;
 
@@ -154,6 +155,7 @@ impl FromApub for PostForm {
     page: &PageExt,
     client: &Client,
     pool: &DbPool,
+    expected_domain: Option<Url>,
   ) -> Result<PostForm, LemmyError> {
     let ext = &page.ext_one;
     let creator_actor_id = page
@@ -203,6 +205,14 @@ impl FromApub for PostForm {
       None => (None, None, None),
     };
 
+    let name = page
+      .inner
+      .summary()
+      .as_ref()
+      .unwrap()
+      .as_single_xsd_string()
+      .unwrap()
+      .to_string();
     let url = page
       .inner
       .url()
@@ -213,17 +223,12 @@ impl FromApub for PostForm {
       .content()
       .as_ref()
       .map(|c| c.as_single_xsd_string().unwrap().to_string());
+    // FIXME: Find a way to delete this shit.
+    let fake_body_slurs_removed = body.map(|b| fake_remove_slurs(&b));
     Ok(PostForm {
-      name: page
-        .inner
-        .summary()
-        .as_ref()
-        .unwrap()
-        .as_single_xsd_string()
-        .unwrap()
-        .to_string(),
+      name,
       url,
-      body,
+      body: fake_body_slurs_removed,
       creator_id: creator.id,
       community_id: community.id,
       removed: None,
@@ -245,7 +250,7 @@ impl FromApub for PostForm {
       embed_description,
       embed_html,
       thumbnail_url,
-      ap_id: page.inner.id_unchecked().unwrap().to_string(),
+      ap_id: check_actor_domain(page, expected_domain)?,
       local: false,
     })
   }
