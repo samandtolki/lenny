@@ -392,7 +392,7 @@ impl Perform for Oper<Register> {
     // Register the new user
     let user_form = UserForm {
       name: data.username.to_owned(),
-      email: data.email.to_owned(),
+      email: Some(data.email.to_owned()),
       matrix_user_id: None,
       avatar: None,
       banner: None,
@@ -556,11 +556,6 @@ impl Perform for Oper<SaveUserSettings> {
     let user_id = user.id;
     let read_user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
 
-    let email = match &data.email {
-      Some(email) => Some(email.to_owned()),
-      None => read_user.email,
-    };
-
     let bio = match &data.bio {
       Some(bio) => {
         if bio.chars().count() <= 300 {
@@ -574,6 +569,7 @@ impl Perform for Oper<SaveUserSettings> {
 
     let avatar = diesel_option_overwrite(&data.avatar);
     let banner = diesel_option_overwrite(&data.banner);
+    let email = diesel_option_overwrite(&data.email);
 
     // The DB constraint should stop too many characters
     let preferred_username = match &data.preferred_username {
@@ -697,7 +693,10 @@ impl Perform for Oper<GetUserDetails> {
       }
     };
 
-    let mut user_view = blocking(pool, move |conn| UserView::read(conn, user_details_id)).await??;
+    let user_view = blocking(pool, move |conn| {
+      UserView::get_user_secure(conn, user_details_id)
+    })
+    .await??;
 
     let page = data.page;
     let limit = data.limit;
@@ -743,13 +742,6 @@ impl Perform for Oper<GetUserDetails> {
       CommunityModeratorView::for_user(conn, user_details_id)
     })
     .await??;
-
-    // If its not the same user, remove the email, and settings
-    // TODO an if let chain would be better here, but can't figure it out
-    // TODO separate out settings into its own thing
-    if user_id.is_none() || user_details_id != user_id.unwrap_or(0) {
-      user_view.email = None;
-    }
 
     // Return the jwt
     Ok(GetUserDetailsResponse {
@@ -854,7 +846,7 @@ impl Perform for Oper<BanUser> {
     blocking(pool, move |conn| ModBan::create(conn, &form)).await??;
 
     let user_id = data.user_id;
-    let user_view = blocking(pool, move |conn| UserView::read(conn, user_id)).await??;
+    let user_view = blocking(pool, move |conn| UserView::get_user_secure(conn, user_id)).await??;
 
     let res = BanUserResponse {
       user: user_view,

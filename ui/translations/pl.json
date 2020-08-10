@@ -197,6 +197,7 @@
     "are_you_sure": "na pewno?",
     "no": "nie",
     "not_logged_in": "Nie jesteś zalogowana/y.",
+    "bio_length_overflow": "To pole nie może przekraczać 300 znaków!",
     "logged_in": "Zalogowano.",
     "community_ban": "Zostałaś/eś zbanowana/y z tej społeczności.",
     "site_ban": "Zostałaś/eś zbanowana/y z tej witryny",
@@ -246,5 +247,7 @@
     "emoji_picker": "Wybór Emoji",
     "select_a_community": "Wybierz społeczność",
     "invalid_username": "Nieprawidłowa nazwa użytkownika.",
-    "invalid_community_name": "Niepoprawna nazwa."
+    "invalid_community_name": "Niepoprawna nazwa.",
+    "play_captcha_audio": "Odsłuchaj Captcha Audio",
+    "bio": "Bio"
 }
