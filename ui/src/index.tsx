@@ -18,6 +18,7 @@ import { Setup } from './components/setup';
 import { AdminSettings } from './components/admin-settings';
 import { Inbox } from './components/inbox';
 import { Search } from './components/search';
+import { Instances } from './components/instances';
 import { Symbols } from './components/symbols';
 import { i18n } from './i18next';
 
@@ -87,6 +88,7 @@ class Index extends Component<any, any> {
                   path={`/password_change/:token`}
                   component={PasswordChange}
                 />
+                <Route path={`/instances`} component={Instances} />
               </Switch>
               <Symbols />
             </div>
