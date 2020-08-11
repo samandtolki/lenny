@@ -31,19 +31,20 @@ use activitystreams::{
     Update,
   },
   context,
-  object::{kind::PageType, Image, Page, Tombstone},
+  object::{kind::PageType, Image, Object, Page, Tombstone},
   prelude::*,
   public,
 };
 use activitystreams_ext::Ext1;
 use actix_web::{body::Body, client::Client, web, HttpResponse};
+use anyhow::Context;
 use lemmy_db::{
   community::Community,
   post::{Post, PostForm},
   user::User_,
   Crud,
 };
-use lemmy_utils::{convert_datetime, fake_remove_slurs};
+use lemmy_utils::{convert_datetime, location_info, fake_remove_slurs};
 use serde::Deserialize;
 use url::Url;
 
@@ -146,6 +147,50 @@ impl ToApub for Post {
   }
 }
 
+struct EmbedType {
+  title: Option<String>,
+  description: Option<String>,
+  html: Option<String>,
+}
+
+fn extract_embed_from_apub(
+  page: &Ext1<Object<PageType>, PageExtension>,
+) -> Result<EmbedType, LemmyError> {
+  match page.inner.preview() {
+    Some(preview) => {
+      let preview_page = Page::from_any_base(preview.one().context(location_info!())?.to_owned())?
+        .context(location_info!())?;
+      let title = preview_page
+        .name()
+        .map(|n| n.one())
+        .flatten()
+        .map(|s| s.as_xsd_string())
+        .flatten()
+        .map(|s| s.to_string());
+      let description = preview_page
+        .summary()
+        .map(|s| s.as_single_xsd_string())
+        .flatten()
+        .map(|s| s.to_string());
+      let html = preview_page
+        .content()
+        .map(|c| c.as_single_xsd_string())
+        .flatten()
+        .map(|s| s.to_string());
+      Ok(EmbedType {
+        title,
+        description,
+        html,
+      })
+    }
+    None => Ok(EmbedType {
+      title: None,
+      description: None,
+      html: None,
+    }),
+  }
+}
+
 #[async_trait::async_trait(?Send)]
 impl FromApub for PostForm {
   type ApubType = PageExt;
@@ -162,9 +207,9 @@ impl FromApub for PostForm {
       .inner
       .attributed_to()
       .as_ref()
-      .unwrap()
+      .context(location_info!())?
       .as_single_xsd_any_uri()
-      .unwrap();
+      .context(location_info!())?;
 
     let creator = get_or_fetch_and_upsert_user(creator_actor_id, client, pool).await?;
 
@@ -172,58 +217,52 @@ impl FromApub for PostForm {
       .inner
       .to()
       .as_ref()
-      .unwrap()
+      .context(location_info!())?
       .as_single_xsd_any_uri()
-      .unwrap();
+      .context(location_info!())?;
 
     let community = get_or_fetch_and_upsert_community(community_actor_id, client, pool).await?;
 
     let thumbnail_url = match &page.inner.image() {
-      Some(any_image) => Image::from_any_base(any_image.to_owned().as_one().unwrap().to_owned())?
-        .unwrap()
-        .url()
-        .unwrap()
-        .as_single_xsd_any_uri()
-        .map(|u| u.to_string()),
+      Some(any_image) => Image::from_any_base(
+        any_image
+          .to_owned()
+          .as_one()
+          .context(location_info!())?
+          .to_owned(),
+      )?
+      .context(location_info!())?
+      .url()
+      .context(location_info!())?
+      .as_single_xsd_any_uri()
+      .map(|u| u.to_string()),
       None => None,
     };
 
-    let (embed_title, embed_description, embed_html) = match page.inner.preview() {
-      Some(preview) => {
-        let preview_page = Page::from_any_base(preview.one().unwrap().to_owned())?.unwrap();
-        let name = preview_page
-          .name()
-          .map(|n| n.as_one().unwrap().as_xsd_string().unwrap().to_string());
-        let summary = preview_page
-          .summary()
-          .map(|s| s.as_single_xsd_string().unwrap().to_string());
-        let content = preview_page
-          .content()
-          .map(|c| c.as_single_xsd_string().unwrap().to_string());
-        (name, summary, content)
-      }
-      None => (None, None, None),
-    };
+    let embed = extract_embed_from_apub(page)?;
 
     let name = page
       .inner
       .summary()
       .as_ref()
-      .unwrap()
+      .context(location_info!())?
       .as_single_xsd_string()
-      .unwrap()
+      .context(location_info!())?
       .to_string();
     let url = page
       .inner
       .url()
       .as_ref()
-      .map(|u| u.as_single_xsd_string().unwrap().to_string());
+      .map(|u| u.as_single_xsd_string())
+      .flatten()
+      .map(|s| s.to_string());
     let body = page
       .inner
       .content()
       .as_ref()
-      .map(|c| c.as_single_xsd_string().unwrap().to_string());
-    // FIXME: Find a way to delete this shit.
+      .map(|c| c.as_single_xsd_string())
+      .flatten()
+      .map(|s| s.to_string());
     let fake_body_slurs_removed = body.map(|b| fake_remove_slurs(&b));
     Ok(PostForm {
       name,
@@ -246,9 +285,9 @@ impl FromApub for PostForm {
       deleted: None,
       nsfw: ext.sensitive,
       stickied: Some(ext.stickied),
-      embed_title,
-      embed_description,
-      embed_html,
+      embed_title: embed.title,
+      embed_description: embed.description,
+      embed_html: embed.html,
       thumbnail_url,
       ap_id: check_actor_domain(page, expected_domain)?,
       local: false,
@@ -280,7 +319,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       create.into_any_base()?,
       client,
       pool,
@@ -311,7 +350,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       update.into_any_base()?,
       client,
       pool,
@@ -341,7 +380,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       delete.into_any_base()?,
       client,
       pool,
@@ -379,7 +418,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,
@@ -409,7 +448,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       mod_,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       remove.into_any_base()?,
       client,
       pool,
@@ -447,7 +486,7 @@ impl ApubObjectType for Post {
     send_activity_to_community(
       mod_,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,
@@ -480,7 +519,7 @@ impl ApubLikeableType for Post {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       like.into_any_base()?,
       client,
       pool,
@@ -510,7 +549,7 @@ impl ApubLikeableType for Post {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       dislike.into_any_base()?,
       client,
       pool,
@@ -548,7 +587,7 @@ impl ApubLikeableType for Post {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,

@@ -41,6 +41,7 @@ use activitystreams::{
   public,
 };
 use actix_web::{body::Body, client::Client, web::Path, HttpResponse};
+use anyhow::Context;
 use itertools::Itertools;
 use lemmy_db::{
   comment::{Comment, CommentForm},
@@ -49,7 +50,13 @@ use lemmy_db::{
   user::User_,
   Crud,
 };
-use lemmy_utils::{convert_datetime, fake_remove_slurs, scrape_text_for_mentions, MentionData};
+use lemmy_utils::{
+  convert_datetime,
+  location_info,
+  fake_remove_slurs,
+  scrape_text_for_mentions,
+  MentionData,
+};
 use log::debug;
 use serde::Deserialize;
 use serde_json::Error;
@@ -136,21 +143,21 @@ impl FromApub for CommentForm {
   ) -> Result<CommentForm, LemmyError> {
     let creator_actor_id = &note
       .attributed_to()
-      .unwrap()
+      .context(location_info!())?
       .as_single_xsd_any_uri()
-      .unwrap();
+      .context(location_info!())?;
 
     let creator = get_or_fetch_and_upsert_user(creator_actor_id, client, pool).await?;
 
     let mut in_reply_tos = note
       .in_reply_to()
       .as_ref()
-      .unwrap()
+      .context(location_info!())?
       .as_many()
-      .unwrap()
+      .context(location_info!())?
       .iter()
-      .map(|i| i.as_xsd_any_uri().unwrap());
-    let post_ap_id = in_reply_tos.next().unwrap();
+      .map(|i| i.as_xsd_any_uri().context(""));
+    let post_ap_id = in_reply_tos.next().context(location_info!())??;
 
     // This post, or the parent comment might not yet exist on this server yet, fetch them.
     let post = get_or_fetch_and_insert_post(&post_ap_id, client, pool).await?;
@@ -159,7 +166,7 @@ impl FromApub for CommentForm {
     // For deeply nested comments, FromApub automatically gets called recursively
     let parent_id: Option<i32> = match in_reply_tos.next() {
       Some(parent_comment_uri) => {
-        let parent_comment_ap_id = &parent_comment_uri;
+        let parent_comment_ap_id = &parent_comment_uri?;
         let parent_comment =
           get_or_fetch_and_insert_comment(&parent_comment_ap_id, client, pool).await?;
 
@@ -169,9 +176,9 @@ impl FromApub for CommentForm {
     };
     let content = note
       .content()
-      .unwrap()
+      .context(location_info!())?
       .as_single_xsd_string()
-      .unwrap()
+      .context(location_info!())?
       .to_string();
     // FIXME: Find a way to delete this shit.
     let fake_content_slurs_removed = fake_remove_slurs(&content);
@@ -296,7 +303,7 @@ impl ApubObjectType for Comment {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       delete.into_any_base()?,
       client,
       pool,
@@ -338,7 +345,7 @@ impl ApubObjectType for Comment {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,
@@ -371,7 +378,7 @@ impl ApubObjectType for Comment {
     send_activity_to_community(
       &mod_,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       remove.into_any_base()?,
       client,
       pool,
@@ -413,7 +420,7 @@ impl ApubObjectType for Comment {
     send_activity_to_community(
       &mod_,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,
@@ -449,7 +456,7 @@ impl ApubLikeableType for Comment {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       like.into_any_base()?,
       client,
       pool,
@@ -482,7 +489,7 @@ impl ApubLikeableType for Comment {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       dislike.into_any_base()?,
       client,
       pool,
@@ -523,7 +530,7 @@ impl ApubLikeableType for Comment {
     send_activity_to_community(
       &creator,
       &community,
-      vec![community.get_shared_inbox_url()],
+      vec![community.get_shared_inbox_url()?],
       undo.into_any_base()?,
       client,
       pool,
@@ -535,7 +542,7 @@ impl ApubLikeableType for Comment {
 
 struct MentionsAndAddresses {
   addressed_ccs: Vec<String>,
-  inboxes: Vec<String>,
+  inboxes: Vec<Url>,
   tags: Vec<Mention>,
 }
 
@@ -570,7 +577,7 @@ async fn collect_non_local_mentions_and_addresses(
     .filter(|m| !m.is_local())
     .collect::<Vec<MentionData>>();
 
-  let mut mention_inboxes = Vec::new();
+  let mut mention_inboxes: Vec<Url> = Vec::new();
   for mention in &mentions {
     // TODO should it be fetching it every time?
     if let Ok(actor_id) = fetch_webfinger_url(mention, client).await {
@@ -578,7 +585,7 @@ async fn collect_non_local_mentions_and_addresses(
       addressed_ccs.push(actor_id.to_owned().to_string());
 
       let mention_user = get_or_fetch_and_upsert_user(&actor_id, client, pool).await?;
-      let shared_inbox = mention_user.get_shared_inbox_url();
+      let shared_inbox = mention_user.get_shared_inbox_url()?;
 
       mention_inboxes.push(shared_inbox);
       let mut mention_tag = Mention::new();
@@ -587,7 +594,7 @@ async fn collect_non_local_mentions_and_addresses(
     }
   }
 
-  let mut inboxes = vec![community.get_shared_inbox_url()];
+  let mut inboxes = vec![community.get_shared_inbox_url()?];
   inboxes.extend(mention_inboxes);
   inboxes = inboxes.into_iter().unique().collect();
 

@@ -128,6 +128,7 @@ pub struct GetSiteResponse {
   pub online: usize,
   version: String,
   my_user: Option<User_>,
+  federated_instances: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -425,6 +426,7 @@ impl Perform for Oper<GetSite> {
       online,
       version: version::VERSION.to_string(),
       my_user,
+      federated_instances: Settings::get().get_allowed_instances(),
     })
   }
 }
@@ -651,6 +653,7 @@ impl Perform for Oper<TransferSite> {
       online: 0,
       version: version::VERSION.to_string(),
       my_user: Some(user),
+      federated_instances: Settings::get().get_allowed_instances(),
     })
   }
 }
