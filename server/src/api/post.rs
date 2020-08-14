@@ -5,20 +5,20 @@ use crate::{
     get_user_from_jwt_opt,
     is_mod_or_admin,
     APIError,
-    Oper,
     Perform,
   },
   apub::{ApubLikeableType, ApubObjectType},
   blocking,
   fetch_iframely_and_pictrs_data,
   websocket::{
-    server::{JoinCommunityRoom, JoinPostRoom, SendPost},
+    server::{GetPostUsersOnline, JoinCommunityRoom, JoinPostRoom, SendPost},
     UserOperation,
     WebsocketInfo,
   },
   DbPool,
   LemmyError,
 };
+use actix_web::client::Client;
 use lemmy_db::{
   comment_view::*,
   community_view::*,
@@ -138,15 +138,16 @@ pub struct SavePost {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<CreatePost> {
+impl Perform for CreatePost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &CreatePost = &self.data;
+    let data: &CreatePost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     if !is_valid_post_title(&data.name) {
@@ -164,7 +165,7 @@ impl Perform for Oper<CreatePost> {
 
     // Fetch Iframely and pictrs cached image
     let (iframely_title, iframely_description, iframely_html, pictrs_thumbnail) =
-      fetch_iframely_and_pictrs_data(&self.client, data.url.to_owned()).await;
+      fetch_iframely_and_pictrs_data(&client, data.url.to_owned()).await;
 
     let post_form = PostForm {
       name: data.name.trim().to_owned(),
@@ -212,7 +213,7 @@ impl Perform for Oper<CreatePost> {
       Err(_e) => return Err(APIError::err("couldnt_create_post").into()),
     };
 
-    updated_post.send_create(&user, &self.client, pool).await?;
+    updated_post.send_create(&user, &client, pool).await?;
 
     // They like their own post by default
     let like_form = PostLikeForm {
@@ -226,7 +227,7 @@ impl Perform for Oper<CreatePost> {
       return Err(APIError::err("couldnt_like_post").into());
     }
 
-    updated_post.send_like(&user, &self.client, pool).await?;
+    updated_post.send_like(&user, &client, pool).await?;
 
     // Refetch the view
     let inserted_post_id = inserted_post.id;
@@ -254,15 +255,16 @@ impl Perform for Oper<CreatePost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<GetPost> {
+impl Perform for GetPost {
   type Response = GetPostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    _client: Client,
   ) -> Result<GetPostResponse, LemmyError> {
-    let data: &GetPost = &self.data;
+    let data: &GetPost = &self;
     let user = get_user_from_jwt_opt(&data.auth, pool).await?;
     let user_id = user.map(|u| u.id);
 
@@ -301,13 +303,10 @@ impl Perform for Oper<GetPost> {
           id,
         });
       }
-
-      // TODO
-      1
-    // let fut = async {
-    //   ws.chatserver.send(GetPostUsersOnline {post_id: data.id}).await.unwrap()
-    // };
-    // Runtime::new().unwrap().block_on(fut)
+      ws.chatserver
+        .send(GetPostUsersOnline { post_id: data.id })
+        .await
+        .unwrap_or(1)
     } else {
       0
     };
@@ -324,15 +323,16 @@ impl Perform for Oper<GetPost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<GetPosts> {
+impl Perform for GetPosts {
   type Response = GetPostsResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    _client: Client,
   ) -> Result<GetPostsResponse, LemmyError> {
-    let data: &GetPosts = &self.data;
+    let data: &GetPosts = &self;
     let user = get_user_from_jwt_opt(&data.auth, pool).await?;
 
     let user_id = match &user {
@@ -389,15 +389,16 @@ impl Perform for Oper<GetPosts> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<CreatePostLike> {
+impl Perform for CreatePostLike {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &CreatePostLike = &self.data;
+    let data: &CreatePostLike = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     // Don't do a downvote if site has downvotes disabled
@@ -421,8 +422,8 @@ impl Perform for Oper<CreatePostLike> {
     };
 
     // Remove any likes first
-    let like_form2 = like_form.clone();
-    blocking(pool, move |conn| PostLike::remove(conn, &like_form2)).await??;
+    let user_id = user.id;
+    blocking(pool, move |conn| PostLike::remove(conn, user_id, post_id)).await??;
 
     // Only add the like if the score isnt 0
     let do_add = like_form.score != 0 && (like_form.score == 1 || like_form.score == -1);
@@ -434,12 +435,12 @@ impl Perform for Oper<CreatePostLike> {
       }
 
       if like_form.score == 1 {
-        post.send_like(&user, &self.client, pool).await?;
+        post.send_like(&user, &client, pool).await?;
       } else if like_form.score == -1 {
-        post.send_dislike(&user, &self.client, pool).await?;
+        post.send_dislike(&user, &client, pool).await?;
       }
     } else {
-      post.send_undo_like(&user, &self.client, pool).await?;
+      post.send_undo_like(&user, &client, pool).await?;
     }
 
     let post_id = data.post_id;
@@ -468,15 +469,16 @@ impl Perform for Oper<CreatePostLike> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<EditPost> {
+impl Perform for EditPost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &EditPost = &self.data;
+    let data: &EditPost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     if !is_valid_post_title(&data.name) {
@@ -495,7 +497,7 @@ impl Perform for Oper<EditPost> {
 
     // Fetch Iframely and Pictrs cached image
     let (iframely_title, iframely_description, iframely_html, pictrs_thumbnail) =
-      fetch_iframely_and_pictrs_data(&self.client, data.url.to_owned()).await;
+      fetch_iframely_and_pictrs_data(&client, data.url.to_owned()).await;
 
     let post_form = PostForm {
       name: data.name.trim().to_owned(),
@@ -534,7 +536,7 @@ impl Perform for Oper<EditPost> {
     };
 
     // Send apub update
-    updated_post.send_update(&user, &self.client, pool).await?;
+    updated_post.send_update(&user, &client, pool).await?;
 
     let edit_id = data.edit_id;
     let post_view = blocking(pool, move |conn| {
@@ -557,15 +559,16 @@ impl Perform for Oper<EditPost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<DeletePost> {
+impl Perform for DeletePost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &DeletePost = &self.data;
+    let data: &DeletePost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
@@ -588,11 +591,9 @@ impl Perform for Oper<DeletePost> {
 
     // apub updates
     if deleted {
-      updated_post.send_delete(&user, &self.client, pool).await?;
+      updated_post.send_delete(&user, &client, pool).await?;
     } else {
-      updated_post
-        .send_undo_delete(&user, &self.client, pool)
-        .await?;
+      updated_post.send_undo_delete(&user, &client, pool).await?;
     }
 
     // Refetch the post
@@ -617,15 +618,16 @@ impl Perform for Oper<DeletePost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<RemovePost> {
+impl Perform for RemovePost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &RemovePost = &self.data;
+    let data: &RemovePost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
@@ -655,11 +657,9 @@ impl Perform for Oper<RemovePost> {
 
     // apub updates
     if removed {
-      updated_post.send_remove(&user, &self.client, pool).await?;
+      updated_post.send_remove(&user, &client, pool).await?;
     } else {
-      updated_post
-        .send_undo_remove(&user, &self.client, pool)
-        .await?;
+      updated_post.send_undo_remove(&user, &client, pool).await?;
     }
 
     // Refetch the post
@@ -685,15 +685,16 @@ impl Perform for Oper<RemovePost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<LockPost> {
+impl Perform for LockPost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &LockPost = &self.data;
+    let data: &LockPost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
@@ -719,7 +720,7 @@ impl Perform for Oper<LockPost> {
     blocking(pool, move |conn| ModLockPost::create(conn, &form)).await??;
 
     // apub updates
-    updated_post.send_update(&user, &self.client, pool).await?;
+    updated_post.send_update(&user, &client, pool).await?;
 
     // Refetch the post
     let edit_id = data.edit_id;
@@ -743,15 +744,16 @@ impl Perform for Oper<LockPost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<StickyPost> {
+impl Perform for StickyPost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     websocket_info: Option<WebsocketInfo>,
+    client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &StickyPost = &self.data;
+    let data: &StickyPost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let edit_id = data.edit_id;
@@ -780,7 +782,7 @@ impl Perform for Oper<StickyPost> {
 
     // Apub updates
     // TODO stickied should pry work like locked for ease of use
-    updated_post.send_update(&user, &self.client, pool).await?;
+    updated_post.send_update(&user, &client, pool).await?;
 
     // Refetch the post
     let edit_id = data.edit_id;
@@ -804,15 +806,16 @@ impl Perform for Oper<StickyPost> {
 }
 
 #[async_trait::async_trait(?Send)]
-impl Perform for Oper<SavePost> {
+impl Perform for SavePost {
   type Response = PostResponse;
 
   async fn perform(
     &self,
     pool: &DbPool,
     _websocket_info: Option<WebsocketInfo>,
+    _client: Client,
   ) -> Result<PostResponse, LemmyError> {
-    let data: &SavePost = &self.data;
+    let data: &SavePost = &self;
     let user = get_user_from_jwt(&data.auth, pool).await?;
 
     let post_saved_form = PostSavedForm {
