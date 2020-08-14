@@ -3,10 +3,10 @@ name: "Continuous Integration"
 on: 
   push:
     branches:
-      - master
+      - downstream
   pull_request:
     branches:
-      - master
+      - downstream
 
 jobs:
   backend:
