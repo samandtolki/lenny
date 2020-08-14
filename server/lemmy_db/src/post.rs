@@ -155,6 +155,15 @@ impl Post {
   pub fn is_post_creator(user_id: i32, post_creator_id: i32) -> bool {
     user_id == post_creator_id
   }
+
+  pub fn upsert(conn: &PgConnection, post_form: &PostForm) -> Result<Post, Error> {
+    let existing = Self::read_from_apub_id(conn, &post_form.ap_id);
+    match existing {
+      Err(NotFound {}) => Ok(Self::create(conn, &post_form)?),
+      Ok(p) => Ok(Self::update(conn, p.id, &post_form)?),
+      Err(e) => Err(e),
+    }
+  }
 }
 
 impl Crud<PostForm> for Post {
@@ -201,24 +210,18 @@ pub struct PostLikeForm {
 }
 
 impl Likeable<PostLikeForm> for PostLike {
-  fn read(conn: &PgConnection, post_id_from: i32) -> Result<Vec<Self>, Error> {
-    use crate::schema::post_like::dsl::*;
-    post_like
-      .filter(post_id.eq(post_id_from))
-      .load::<Self>(conn)
-  }
   fn like(conn: &PgConnection, post_like_form: &PostLikeForm) -> Result<Self, Error> {
     use crate::schema::post_like::dsl::*;
     insert_into(post_like)
       .values(post_like_form)
       .get_result::<Self>(conn)
   }
-  fn remove(conn: &PgConnection, post_like_form: &PostLikeForm) -> Result<usize, Error> {
-    use crate::schema::post_like::dsl::*;
+  fn remove(conn: &PgConnection, user_id: i32, post_id: i32) -> Result<usize, Error> {
+    use crate::schema::post_like::dsl;
     diesel::delete(
-      post_like
-        .filter(post_id.eq(post_like_form.post_id))
-        .filter(user_id.eq(post_like_form.user_id)),
+      dsl::post_like
+        .filter(dsl::post_id.eq(post_id))
+        .filter(dsl::user_id.eq(user_id)),
     )
     .execute(conn)
   }
@@ -264,8 +267,11 @@ impl Saveable<PostSavedForm> for PostSaved {
 #[table_name = "post_read"]
 pub struct PostRead {
   pub id: i32,
+
   pub post_id: i32,
+
   pub user_id: i32,
+
   pub published: chrono::NaiveDateTime,
 }
 
@@ -273,6 +279,7 @@ pub struct PostRead {
 #[table_name = "post_read"]
 pub struct PostReadForm {
   pub post_id: i32,
+
   pub user_id: i32,
 }
 
@@ -283,6 +290,7 @@ impl Readable<PostReadForm> for PostRead {
       .values(post_read_form)
       .get_result::<Self>(conn)
   }
+
   fn mark_as_unread(conn: &PgConnection, post_read_form: &PostReadForm) -> Result<usize, Error> {
     use crate::schema::post_read::dsl::*;
     diesel::delete(
@@ -453,7 +461,7 @@ mod tests {
 
     let read_post = Post::read(&conn, inserted_post.id).unwrap();
     let updated_post = Post::update(&conn, inserted_post.id, &new_post).unwrap();
-    let like_removed = PostLike::remove(&conn, &post_like_form).unwrap();
+    let like_removed = PostLike::remove(&conn, inserted_user.id, inserted_post.id).unwrap();
     let saved_removed = PostSaved::unsave(&conn, &post_saved_form).unwrap();
     let read_removed = PostRead::mark_as_unread(&conn, &post_read_form).unwrap();
     let num_deleted = Post::delete(&conn, inserted_post.id).unwrap();

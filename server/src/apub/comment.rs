@@ -298,7 +298,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(DeleteType::Delete)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &creator,
@@ -332,7 +332,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(DeleteType::Delete)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     // Undo that fake activity
     let mut undo = Undo::new(creator.actor_id.to_owned(), delete.into_any_base()?);
@@ -340,7 +340,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(UndoType::Undo)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &creator,
@@ -373,7 +373,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(RemoveType::Remove)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &mod_,
@@ -407,7 +407,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(RemoveType::Remove)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     // Undo that fake activity
     let mut undo = Undo::new(mod_.actor_id.to_owned(), remove.into_any_base()?);
@@ -415,7 +415,7 @@ impl ApubObjectType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(UndoType::Undo)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &mod_,
@@ -451,7 +451,7 @@ impl ApubLikeableType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(LikeType::Like)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &creator,
@@ -484,7 +484,7 @@ impl ApubLikeableType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(DislikeType::Dislike)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &creator,
@@ -517,7 +517,7 @@ impl ApubLikeableType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(DislikeType::Dislike)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     // Undo that fake activity
     let mut undo = Undo::new(creator.actor_id.to_owned(), like.into_any_base()?);
@@ -525,7 +525,7 @@ impl ApubLikeableType for Comment {
       .set_context(context())
       .set_id(generate_activity_id(UndoType::Undo)?)
       .set_to(public())
-      .set_many_ccs(vec![community.get_followers_url()]);
+      .set_many_ccs(vec![community.get_followers_url()?]);
 
     send_activity_to_community(
       &creator,
@@ -541,7 +541,7 @@ impl ApubLikeableType for Comment {
 }
 
 struct MentionsAndAddresses {
-  addressed_ccs: Vec<String>,
+  addressed_ccs: Vec<Url>,
   inboxes: Vec<Url>,
   tags: Vec<Mention>,
 }
@@ -565,7 +565,7 @@ async fn collect_non_local_mentions_and_addresses(
   client: &Client,
   pool: &DbPool,
 ) -> Result<MentionsAndAddresses, LemmyError> {
-  let mut addressed_ccs = vec![community.get_followers_url()];
+  let mut addressed_ccs = vec![community.get_followers_url()?];
 
   // Add the mention tag
   let mut tags = Vec::new();
@@ -582,7 +582,7 @@ async fn collect_non_local_mentions_and_addresses(
     // TODO should it be fetching it every time?
     if let Ok(actor_id) = fetch_webfinger_url(mention, client).await {
       debug!("mention actor_id: {}", actor_id);
-      addressed_ccs.push(actor_id.to_owned().to_string());
+      addressed_ccs.push(actor_id.to_owned().to_string().parse()?);
 
       let mention_user = get_or_fetch_and_upsert_user(&actor_id, client, pool).await?;
       let shared_inbox = mention_user.get_shared_inbox_url()?;

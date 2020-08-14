@@ -1,6 +1,12 @@
 name: "Continuous Integration"
 
-on: [push, pull_request]
+on: 
+  push:
+    branches:
+      - downstream
+  pull_request:
+    branches:
+      - downstream
 
 jobs:
   backend:
