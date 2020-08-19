@@ -15,10 +15,10 @@ use crate::{
     UserOperation,
     WebsocketInfo,
   },
-  DbPool,
+  LemmyContext,
   LemmyError,
 };
-use actix_web::client::Client;
+use actix_web::web::Data;
 use anyhow::Context;
 use bcrypt::verify;
 use captcha::{gen, Difficulty};
@@ -301,15 +301,14 @@ impl Perform for Login {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &Login = &self;
 
     // Fetch that username / email
     let username_or_email = data.username_or_email.clone();
-    let user = match blocking(pool, move |conn| {
+    let user = match blocking(context.pool(), move |conn| {
       User_::find_by_email_or_username(conn, &username_or_email)
     })
     .await?
@@ -337,14 +336,13 @@ impl Perform for Register {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &Register = &self;
 
     // Make sure site has open registration
-    if let Ok(site) = blocking(pool, move |conn| SiteView::read(conn)).await? {
+    if let Ok(site) = blocking(context.pool(), move |conn| SiteView::read(conn)).await? {
       let site: SiteView = site;
       if !site.open_registration {
         return Err(APIError::err("registration_closed").into());
@@ -382,7 +380,7 @@ impl Perform for Register {
     }
 
     // Make sure there are no admins
-    let any_admins = blocking(pool, move |conn| {
+    let any_admins = blocking(context.pool(), move |conn| {
       UserView::admins(conn).map(|a| a.is_empty())
     })
     .await??;
@@ -423,7 +421,11 @@ impl Perform for Register {
     };
 
     // Create the user
-    let inserted_user = match blocking(pool, move |conn| User_::register(conn, &user_form)).await? {
+    let inserted_user = match blocking(context.pool(), move |conn| {
+      User_::register(conn, &user_form)
+    })
+    .await?
+    {
       Ok(user) => user,
       Err(e) => {
         let err_type = if e.to_string()
@@ -441,7 +443,9 @@ impl Perform for Register {
     let main_community_keypair = generate_actor_keypair()?;
 
     // Create the main community if it doesn't exist
-    let main_community = match blocking(pool, move |conn| Community::read(conn, 2)).await? {
+    let main_community = match blocking(context.pool(), move |conn| Community::read(conn, 2))
+      .await?
+    {
       Ok(c) => c,
       Err(_e) => {
         let default_community_name = "main";
@@ -464,7 +468,10 @@ impl Perform for Register {
           icon: None,
           banner: None,
         };
-        blocking(pool, move |conn| Community::create(conn, &community_form)).await??
+        blocking(context.pool(), move |conn| {
+          Community::create(conn, &community_form)
+        })
+        .await??
       }
     };
 
@@ -475,7 +482,7 @@ impl Perform for Register {
     };
 
     let follow = move |conn: &'_ _| CommunityFollower::follow(conn, &community_follower_form);
-    if blocking(pool, follow).await?.is_err() {
+    if blocking(context.pool(), follow).await?.is_err() {
       return Err(APIError::err("community_follower_already_exists").into());
     };
 
@@ -487,7 +494,7 @@ impl Perform for Register {
       };
 
       let join = move |conn: &'_ _| CommunityModerator::join(conn, &community_moderator_form);
-      if blocking(pool, join).await?.is_err() {
+      if blocking(context.pool(), join).await?.is_err() {
         return Err(APIError::err("community_moderator_already_exists").into());
       }
     }
@@ -505,9 +512,8 @@ impl Perform for GetCaptcha {
 
   async fn perform(
     &self,
-    _pool: &DbPool,
+    _context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<Self::Response, LemmyError> {
     let captcha_settings = Settings::get().captcha;
 
@@ -554,15 +560,14 @@ impl Perform for SaveUserSettings {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &SaveUserSettings = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let user_id = user.id;
-    let read_user = blocking(pool, move |conn| User_::read(conn, user_id)).await??;
+    let read_user = blocking(context.pool(), move |conn| User_::read(conn, user_id)).await??;
 
     let bio = match &data.bio {
       Some(bio) => {
@@ -608,7 +613,7 @@ impl Perform for SaveUserSettings {
                   return Err(APIError::err("password_incorrect").into());
                 }
                 let new_password = new_password.to_owned();
-                let user = blocking(pool, move |conn| {
+                let user = blocking(context.pool(), move |conn| {
                   User_::update_password(conn, user_id, &new_password)
                 })
                 .await??;
@@ -649,7 +654,10 @@ impl Perform for SaveUserSettings {
       last_refreshed_at: None,
     };
 
-    let res = blocking(pool, move |conn| User_::update(conn, user_id, &user_form)).await?;
+    let res = blocking(context.pool(), move |conn| {
+      User_::update(conn, user_id, &user_form)
+    })
+    .await?;
     let updated_user: User_ = match res {
       Ok(user) => user,
       Err(e) => {
@@ -678,12 +686,11 @@ impl Perform for GetUserDetails {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<GetUserDetailsResponse, LemmyError> {
     let data: &GetUserDetails = &self;
-    let user = get_user_from_jwt_opt(&data.auth, pool).await?;
+    let user = get_user_from_jwt_opt(&data.auth, context.pool()).await?;
 
     let show_nsfw = match &user {
       Some(user) => user.show_nsfw,
@@ -699,7 +706,10 @@ impl Perform for GetUserDetails {
     let user_details_id = match data.user_id {
       Some(id) => id,
       None => {
-        let user = blocking(pool, move |conn| User_::read_from_name(conn, &username)).await?;
+        let user = blocking(context.pool(), move |conn| {
+          User_::read_from_name(conn, &username)
+        })
+        .await?;
         match user {
           Ok(user) => user.id,
           Err(_e) => return Err(APIError::err("couldnt_find_that_username_or_email").into()),
@@ -707,7 +717,7 @@ impl Perform for GetUserDetails {
       }
     };
 
-    let user_view = blocking(pool, move |conn| {
+    let user_view = blocking(context.pool(), move |conn| {
       UserView::get_user_secure(conn, user_details_id)
     })
     .await??;
@@ -717,7 +727,7 @@ impl Perform for GetUserDetails {
     let saved_only = data.saved_only;
     let community_id = data.community_id;
     let user_id = user.map(|u| u.id);
-    let (posts, comments) = blocking(pool, move |conn| {
+    let (posts, comments) = blocking(context.pool(), move |conn| {
       let mut posts_query = PostQueryBuilder::create(conn)
         .sort(&sort)
         .show_nsfw(show_nsfw)
@@ -748,11 +758,11 @@ impl Perform for GetUserDetails {
     })
     .await??;
 
-    let follows = blocking(pool, move |conn| {
+    let follows = blocking(context.pool(), move |conn| {
       CommunityFollowerView::for_user(conn, user_details_id)
     })
     .await??;
-    let moderates = blocking(pool, move |conn| {
+    let moderates = blocking(context.pool(), move |conn| {
       CommunityModeratorView::for_user(conn, user_details_id)
     })
     .await??;
@@ -774,20 +784,19 @@ impl Perform for AddAdmin {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<AddAdminResponse, LemmyError> {
     let data: &AddAdmin = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Make sure user is an admin
-    is_admin(pool, user.id).await?;
+    is_admin(context.pool(), user.id).await?;
 
     let added = data.added;
     let added_user_id = data.user_id;
     let add_admin = move |conn: &'_ _| User_::add_admin(conn, added_user_id, added);
-    if blocking(pool, add_admin).await?.is_err() {
+    if blocking(context.pool(), add_admin).await?.is_err() {
       return Err(APIError::err("couldnt_update_user").into());
     }
 
@@ -798,12 +807,14 @@ impl Perform for AddAdmin {
       removed: Some(!data.added),
     };
 
-    blocking(pool, move |conn| ModAdd::create(conn, &form)).await??;
+    blocking(context.pool(), move |conn| ModAdd::create(conn, &form)).await??;
 
-    let site_creator_id =
-      blocking(pool, move |conn| Site::read(conn, 1).map(|s| s.creator_id)).await??;
+    let site_creator_id = blocking(context.pool(), move |conn| {
+      Site::read(conn, 1).map(|s| s.creator_id)
+    })
+    .await??;
 
-    let mut admins = blocking(pool, move |conn| UserView::admins(conn)).await??;
+    let mut admins = blocking(context.pool(), move |conn| UserView::admins(conn)).await??;
     let creator_index = admins
       .iter()
       .position(|r| r.id == site_creator_id)
@@ -831,39 +842,38 @@ impl Perform for BanUser {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<BanUserResponse, LemmyError> {
     let data: &BanUser = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Make sure user is an admin
-    is_admin(pool, user.id).await?;
+    is_admin(context.pool(), user.id).await?;
 
     let ban = data.ban;
     let banned_user_id = data.user_id;
     let ban_user = move |conn: &'_ _| User_::ban_user(conn, banned_user_id, ban);
-    if blocking(pool, ban_user).await?.is_err() {
+    if blocking(context.pool(), ban_user).await?.is_err() {
       return Err(APIError::err("couldnt_update_user").into());
     }
 
     // Remove their data if that's desired
     if let Some(remove_data) = data.remove_data {
       // Posts
-      blocking(pool, move |conn: &'_ _| {
+      blocking(context.pool(), move |conn: &'_ _| {
         Post::update_removed_for_creator(conn, banned_user_id, None, remove_data)
       })
       .await??;
 
       // Communities
-      blocking(pool, move |conn: &'_ _| {
+      blocking(context.pool(), move |conn: &'_ _| {
         Community::update_removed_for_creator(conn, banned_user_id, remove_data)
       })
       .await??;
 
       // Comments
-      blocking(pool, move |conn: &'_ _| {
+      blocking(context.pool(), move |conn: &'_ _| {
         Comment::update_removed_for_creator(conn, banned_user_id, remove_data)
       })
       .await??;
@@ -883,10 +893,13 @@ impl Perform for BanUser {
       expires,
     };
 
-    blocking(pool, move |conn| ModBan::create(conn, &form)).await??;
+    blocking(context.pool(), move |conn| ModBan::create(conn, &form)).await??;
 
     let user_id = data.user_id;
-    let user_view = blocking(pool, move |conn| UserView::get_user_secure(conn, user_id)).await??;
+    let user_view = blocking(context.pool(), move |conn| {
+      UserView::get_user_secure(conn, user_id)
+    })
+    .await??;
 
     let res = BanUserResponse {
       user: user_view,
@@ -911,12 +924,11 @@ impl Perform for GetReplies {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<GetRepliesResponse, LemmyError> {
     let data: &GetReplies = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let sort = SortType::from_str(&data.sort)?;
 
@@ -924,7 +936,7 @@ impl Perform for GetReplies {
     let limit = data.limit;
     let unread_only = data.unread_only;
     let user_id = user.id;
-    let replies = blocking(pool, move |conn| {
+    let replies = blocking(context.pool(), move |conn| {
       ReplyQueryBuilder::create(conn, user_id)
         .sort(&sort)
         .unread_only(unread_only)
@@ -944,12 +956,11 @@ impl Perform for GetUserMentions {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<GetUserMentionsResponse, LemmyError> {
     let data: &GetUserMentions = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let sort = SortType::from_str(&data.sort)?;
 
@@ -957,7 +968,7 @@ impl Perform for GetUserMentions {
     let limit = data.limit;
     let unread_only = data.unread_only;
     let user_id = user.id;
-    let mentions = blocking(pool, move |conn| {
+    let mentions = blocking(context.pool(), move |conn| {
       UserMentionQueryBuilder::create(conn, user_id)
         .sort(&sort)
         .unread_only(unread_only)
@@ -977,16 +988,17 @@ impl Perform for MarkUserMentionAsRead {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<UserMentionResponse, LemmyError> {
     let data: &MarkUserMentionAsRead = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let user_mention_id = data.user_mention_id;
-    let read_user_mention =
-      blocking(pool, move |conn| UserMention::read(conn, user_mention_id)).await??;
+    let read_user_mention = blocking(context.pool(), move |conn| {
+      UserMention::read(conn, user_mention_id)
+    })
+    .await??;
 
     if user.id != read_user_mention.recipient_id {
       return Err(APIError::err("couldnt_update_comment").into());
@@ -995,13 +1007,13 @@ impl Perform for MarkUserMentionAsRead {
     let user_mention_id = read_user_mention.id;
     let read = data.read;
     let update_mention = move |conn: &'_ _| UserMention::update_read(conn, user_mention_id, read);
-    if blocking(pool, update_mention).await?.is_err() {
+    if blocking(context.pool(), update_mention).await?.is_err() {
       return Err(APIError::err("couldnt_update_comment").into());
     };
 
     let user_mention_id = read_user_mention.id;
     let user_id = user.id;
-    let user_mention_view = blocking(pool, move |conn| {
+    let user_mention_view = blocking(context.pool(), move |conn| {
       UserMentionView::read(conn, user_mention_id, user_id)
     })
     .await??;
@@ -1018,15 +1030,14 @@ impl Perform for MarkAllAsRead {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<GetRepliesResponse, LemmyError> {
     let data: &MarkAllAsRead = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let user_id = user.id;
-    let replies = blocking(pool, move |conn| {
+    let replies = blocking(context.pool(), move |conn| {
       ReplyQueryBuilder::create(conn, user_id)
         .unread_only(true)
         .page(1)
@@ -1041,20 +1052,23 @@ impl Perform for MarkAllAsRead {
     for reply in &replies {
       let reply_id = reply.id;
       let mark_as_read = move |conn: &'_ _| Comment::update_read(conn, reply_id, true);
-      if blocking(pool, mark_as_read).await?.is_err() {
+      if blocking(context.pool(), mark_as_read).await?.is_err() {
         return Err(APIError::err("couldnt_update_comment").into());
       }
     }
 
     // Mark all user mentions as read
     let update_user_mentions = move |conn: &'_ _| UserMention::mark_all_as_read(conn, user_id);
-    if blocking(pool, update_user_mentions).await?.is_err() {
+    if blocking(context.pool(), update_user_mentions)
+      .await?
+      .is_err()
+    {
       return Err(APIError::err("couldnt_update_comment").into());
     }
 
     // Mark all private_messages as read
     let update_pm = move |conn: &'_ _| PrivateMessage::mark_all_as_read(conn, user_id);
-    if blocking(pool, update_pm).await?.is_err() {
+    if blocking(context.pool(), update_pm).await?.is_err() {
       return Err(APIError::err("couldnt_update_private_message").into());
     }
 
@@ -1068,12 +1082,11 @@ impl Perform for DeleteAccount {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &DeleteAccount = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Verify the password
     let valid: bool = verify(&data.password, &user.password_encrypted).unwrap_or(false);
@@ -1084,13 +1097,13 @@ impl Perform for DeleteAccount {
     // Comments
     let user_id = user.id;
     let permadelete = move |conn: &'_ _| Comment::permadelete_for_creator(conn, user_id);
-    if blocking(pool, permadelete).await?.is_err() {
+    if blocking(context.pool(), permadelete).await?.is_err() {
       return Err(APIError::err("couldnt_update_comment").into());
     }
 
     // Posts
     let permadelete = move |conn: &'_ _| Post::permadelete_for_creator(conn, user_id);
-    if blocking(pool, permadelete).await?.is_err() {
+    if blocking(context.pool(), permadelete).await?.is_err() {
       return Err(APIError::err("couldnt_update_post").into());
     }
 
@@ -1106,15 +1119,18 @@ impl Perform for PasswordReset {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<PasswordResetResponse, LemmyError> {
     let data: &PasswordReset = &self;
 
     // Fetch that email
     let email = data.email.clone();
-    let user = match blocking(pool, move |conn| User_::find_by_email(conn, &email)).await? {
+    let user = match blocking(context.pool(), move |conn| {
+      User_::find_by_email(conn, &email)
+    })
+    .await?
+    {
       Ok(user) => user,
       Err(_e) => return Err(APIError::err("couldnt_find_that_username_or_email").into()),
     };
@@ -1125,7 +1141,7 @@ impl Perform for PasswordReset {
     // Insert the row
     let token2 = token.clone();
     let user_id = user.id;
-    blocking(pool, move |conn| {
+    blocking(context.pool(), move |conn| {
       PasswordResetRequest::create_token(conn, user_id, &token2)
     })
     .await??;
@@ -1151,15 +1167,14 @@ impl Perform for PasswordChange {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<LoginResponse, LemmyError> {
     let data: &PasswordChange = &self;
 
     // Fetch the user_id from the token
     let token = data.token.clone();
-    let user_id = blocking(pool, move |conn| {
+    let user_id = blocking(context.pool(), move |conn| {
       PasswordResetRequest::read_from_token(conn, &token).map(|p| p.user_id)
     })
     .await??;
@@ -1171,7 +1186,7 @@ impl Perform for PasswordChange {
 
     // Update the user with the new password
     let password = data.password.clone();
-    let updated_user = match blocking(pool, move |conn| {
+    let updated_user = match blocking(context.pool(), move |conn| {
       User_::update_password(conn, user_id, &password)
     })
     .await?
@@ -1193,12 +1208,11 @@ impl Perform for CreatePrivateMessage {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    client: Client,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &CreatePrivateMessage = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     let hostname = &format!("https://{}", Settings::get().hostname);
 
@@ -1217,7 +1231,7 @@ impl Perform for CreatePrivateMessage {
       published: None,
     };
 
-    let inserted_private_message = match blocking(pool, move |conn| {
+    let inserted_private_message = match blocking(context.pool(), move |conn| {
       PrivateMessage::create(conn, &private_message_form)
     })
     .await?
@@ -1229,7 +1243,7 @@ impl Perform for CreatePrivateMessage {
     };
 
     let inserted_private_message_id = inserted_private_message.id;
-    let updated_private_message = match blocking(pool, move |conn| {
+    let updated_private_message = match blocking(context.pool(), move |conn| {
       let apub_id = make_apub_endpoint(
         EndpointType::PrivateMessage,
         &inserted_private_message_id.to_string(),
@@ -1243,13 +1257,12 @@ impl Perform for CreatePrivateMessage {
       Err(_e) => return Err(APIError::err("couldnt_create_private_message").into()),
     };
 
-    updated_private_message
-      .send_create(&user, &client, pool)
-      .await?;
+    updated_private_message.send_create(&user, context).await?;
 
     // Send notifications to the recipient
     let recipient_id = data.recipient_id;
-    let recipient_user = blocking(pool, move |conn| User_::read(conn, recipient_id)).await??;
+    let recipient_user =
+      blocking(context.pool(), move |conn| User_::read(conn, recipient_id)).await??;
     if recipient_user.send_notifications_to_email {
       if let Some(email) = recipient_user.email {
         let subject = &format!(
@@ -1268,7 +1281,7 @@ impl Perform for CreatePrivateMessage {
       }
     }
 
-    let message = blocking(pool, move |conn| {
+    let message = blocking(context.pool(), move |conn| {
       PrivateMessageView::read(conn, inserted_private_message.id)
     })
     .await??;
@@ -1294,17 +1307,18 @@ impl Perform for EditPrivateMessage {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    client: Client,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &EditPrivateMessage = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
-    let orig_private_message =
-      blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
+    let orig_private_message = blocking(context.pool(), move |conn| {
+      PrivateMessage::read(conn, edit_id)
+    })
+    .await??;
     if user.id != orig_private_message.creator_id {
       return Err(APIError::err("no_private_message_edit_allowed").into());
     }
@@ -1313,7 +1327,7 @@ impl Perform for EditPrivateMessage {
     // FIXME: Find a way to delete this shit.
     let fake_content_slurs_removed = fake_remove_slurs(&data.content);
     let edit_id = data.edit_id;
-    let updated_private_message = match blocking(pool, move |conn| {
+    let updated_private_message = match blocking(context.pool(), move |conn| {
       PrivateMessage::update_content(conn, edit_id, &fake_content_slurs_removed)
     })
     .await?
@@ -1323,12 +1337,13 @@ impl Perform for EditPrivateMessage {
     };
 
     // Send the apub update
-    updated_private_message
-      .send_update(&user, &client, pool)
-      .await?;
+    updated_private_message.send_update(&user, context).await?;
 
     let edit_id = data.edit_id;
-    let message = blocking(pool, move |conn| PrivateMessageView::read(conn, edit_id)).await??;
+    let message = blocking(context.pool(), move |conn| {
+      PrivateMessageView::read(conn, edit_id)
+    })
+    .await??;
     let recipient_id = message.recipient_id;
 
     let res = PrivateMessageResponse { message };
@@ -1352,17 +1367,18 @@ impl Perform for DeletePrivateMessage {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    client: Client,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &DeletePrivateMessage = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
-    let orig_private_message =
-      blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
+    let orig_private_message = blocking(context.pool(), move |conn| {
+      PrivateMessage::read(conn, edit_id)
+    })
+    .await??;
     if user.id != orig_private_message.creator_id {
       return Err(APIError::err("no_private_message_edit_allowed").into());
     }
@@ -1370,7 +1386,7 @@ impl Perform for DeletePrivateMessage {
     // Doing the update
     let edit_id = data.edit_id;
     let deleted = data.deleted;
-    let updated_private_message = match blocking(pool, move |conn| {
+    let updated_private_message = match blocking(context.pool(), move |conn| {
       PrivateMessage::update_deleted(conn, edit_id, deleted)
     })
     .await?
@@ -1381,17 +1397,18 @@ impl Perform for DeletePrivateMessage {
 
     // Send the apub update
     if data.deleted {
-      updated_private_message
-        .send_delete(&user, &client, pool)
-        .await?;
+      updated_private_message.send_delete(&user, context).await?;
     } else {
       updated_private_message
-        .send_undo_delete(&user, &client, pool)
+        .send_undo_delete(&user, context)
         .await?;
     }
 
     let edit_id = data.edit_id;
-    let message = blocking(pool, move |conn| PrivateMessageView::read(conn, edit_id)).await??;
+    let message = blocking(context.pool(), move |conn| {
+      PrivateMessageView::read(conn, edit_id)
+    })
+    .await??;
     let recipient_id = message.recipient_id;
 
     let res = PrivateMessageResponse { message };
@@ -1415,17 +1432,18 @@ impl Perform for MarkPrivateMessageAsRead {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<PrivateMessageResponse, LemmyError> {
     let data: &MarkPrivateMessageAsRead = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     // Checking permissions
     let edit_id = data.edit_id;
-    let orig_private_message =
-      blocking(pool, move |conn| PrivateMessage::read(conn, edit_id)).await??;
+    let orig_private_message = blocking(context.pool(), move |conn| {
+      PrivateMessage::read(conn, edit_id)
+    })
+    .await??;
     if user.id != orig_private_message.recipient_id {
       return Err(APIError::err("couldnt_update_private_message").into());
     }
@@ -1433,7 +1451,7 @@ impl Perform for MarkPrivateMessageAsRead {
     // Doing the update
     let edit_id = data.edit_id;
     let read = data.read;
-    match blocking(pool, move |conn| {
+    match blocking(context.pool(), move |conn| {
       PrivateMessage::update_read(conn, edit_id, read)
     })
     .await?
@@ -1445,7 +1463,10 @@ impl Perform for MarkPrivateMessageAsRead {
     // No need to send an apub update
 
     let edit_id = data.edit_id;
-    let message = blocking(pool, move |conn| PrivateMessageView::read(conn, edit_id)).await??;
+    let message = blocking(context.pool(), move |conn| {
+      PrivateMessageView::read(conn, edit_id)
+    })
+    .await??;
     let recipient_id = message.recipient_id;
 
     let res = PrivateMessageResponse { message };
@@ -1469,18 +1490,17 @@ impl Perform for GetPrivateMessages {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     _websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<PrivateMessagesResponse, LemmyError> {
     let data: &GetPrivateMessages = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
     let user_id = user.id;
 
     let page = data.page;
     let limit = data.limit;
     let unread_only = data.unread_only;
-    let messages = blocking(pool, move |conn| {
+    let messages = blocking(context.pool(), move |conn| {
       PrivateMessageQueryBuilder::create(&conn, user_id)
         .page(page)
         .limit(limit)
@@ -1499,12 +1519,11 @@ impl Perform for UserJoin {
 
   async fn perform(
     &self,
-    pool: &DbPool,
+    context: &Data<LemmyContext>,
     websocket_info: Option<WebsocketInfo>,
-    _client: Client,
   ) -> Result<UserJoinResponse, LemmyError> {
     let data: &UserJoin = &self;
-    let user = get_user_from_jwt(&data.auth, pool).await?;
+    let user = get_user_from_jwt(&data.auth, context.pool()).await?;
 
     if let Some(ws) = websocket_info {
       if let Some(id) = ws.id {
