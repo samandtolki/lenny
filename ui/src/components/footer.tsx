@@ -44,9 +44,6 @@ export class Footer extends Component<any, FooterState> {
         <div className="navbar-collapse">
           <ul class="navbar-nav ml-auto">
             <li class="nav-item">
-              <span class="navbar-text">( ͡° ͜ʖ ͡°) {this.state.version}</span>
-            </li>
-            <li class="nav-item">
               <Link class="nav-link" to="/modlog">
                 {i18n.t('modlog')}
               </Link>
