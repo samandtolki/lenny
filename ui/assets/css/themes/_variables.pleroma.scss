@@ -1,30 +1,40 @@
-$white: #ffffff;
-$orange: #f86f0f;
-$cyan: #02bdc2;
-$green: #0fa00f;
+// Colors
 $blue: #0095ff;
-$secondary: $blue;
-$link-color: theme-color("primary");
-$primary: $orange;
+$green: #0fa00f;
+$orange: #f86f0f;
 $red: #d31014;
+
+// Main
+$body-bg: #f2f4f6;
+$body-color: #304055;
+$border-color: #d6dfed;
+$danger: $red;
+$info: $blue;
+$link-color: $primary;
+$primary: $orange;
+$secondary: #6f83a4;
+$success: $green;
+$warning: $orange;
+
+// Navbar
+$navbar-light-hover-color: $gray-900;
+$navbar-light-color: $gray-600;
+$navbar-dark-toggler-border-color: $border-color;
+$navbar-light-active-color: $gray-900;
+
+// Cards
+$card-color: $gray-700;
+$card-cap-color: $gray-700;
+$card-bg: $gray-100;
+
+// Radius
 $border-radius: 0;
 $border-radius-lg: 0;
 $border-radius-sm: 0;
-$input-btn-focus-color: rgba($component-active-bg, .75);
-$form-feedback-valid-color: theme-color("info");
-$navbar-light-color: $gray-600;
-$black: #222222;
-$navbar-dark-toggler-border-color: rgba($black, .1);
-$navbar-light-active-color: $gray-900;
-$card-color: $gray-700;
-$card-cap-color: $gray-700;
-$info: $blue;
-$body-bg: #f2f4f6;
-$body-color: #304055;
-$success: $green;
-$danger: $red;
-$navbar-light-hover-color: $gray-900;
-$card-bg: $gray-100;
-$border-color: $gray-700;
-$mark-bg: rgb(255, 252, 239);
 $rounded-pill: 0.25rem;
+
+// Misc
+$mark-bg: rgb(255, 252, 239);
+$pre-color: inherit;
+$form-feedback-valid-color: theme-color("info");
+$input-btn-focus-color: rgba($component-active-bg, .75);
